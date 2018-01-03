@@ -15,20 +15,22 @@
 
 		public static string CalucateHash(this Block block)
 		{
-			return CalculateHash(block.Index, block.PreviousHash, block.Timestamp, block.Data);
+			return CalculateHash(block.Index, block.PreviousHash, block.Timestamp, block.Data, block.Difficulty, block.Nonce);
 		}
 
 		/// <summary>
-		/// Calculate a SHA256 hash for the given string values.
+		/// Calculate a SHA256 hash for the given values.
 		/// </summary>
 		/// <param name="index"></param>
 		/// <param name="previousHash"></param>
 		/// <param name="timestamp"></param>
 		/// <param name="data"></param>
+		/// <param name="difficulty"></param>
+		/// <param name="nonce"></param>
 		/// <returns></returns>
-		public static string CalculateHash(ulong index, string previousHash, DateTime timestamp, string data)
+		public static string CalculateHash(long index, string previousHash, long timestamp, string data, int difficulty, int nonce)
 		{
-			return CalculateHash(index.ToString(), previousHash, timestamp.ToString("O"), data);
+			return CalculateHash(index.ToString(), previousHash, timestamp.ToString(), data, difficulty.ToString(), nonce.ToString());
 		}
 
 		private static string CalculateHash(params string[] args)

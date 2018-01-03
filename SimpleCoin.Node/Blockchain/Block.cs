@@ -1,27 +1,32 @@
 ﻿namespace SimpleCoin.Node.Blockchain
 {
 	using System;
-	using System.Linq;
-	using System.Security.Cryptography;
-	using System.Text;
 
 	public sealed class Block
 	{
-		public Block(ulong index, string data, DateTime timestamp, string previousHash)
+		// In seconds.
+		public const int BlockGenerationInterval = 10;
+
+		// In blocks.
+		public const int DifficultyAdjustmentInterval = 10;
+
+		public Block(long index, string data, long timestamp, string previousHash, int difficulty, int nonce)
 		{
 			this.Index = index;
 			this.Data = data ?? string.Empty;
 			this.Timestamp = timestamp;
 			this.PreviousHash = previousHash ?? string.Empty;
+			this.Difficulty = difficulty;
+			this.Nonce = nonce;
 
 			// Create the SHA256 hash for the block.
-			this.Hash = BlockExtensions.CalculateHash(index, previousHash, timestamp, data);
+			this.Hash = BlockExtensions.CalculateHash(index, previousHash, timestamp, data, difficulty, nonce);
 		}
 
 		/// <summary>
 		/// The height of the block in the chain.
 		/// </summary>
-		public ulong Index { get; }
+		public long Index { get; }
 
 		/// <summary>
 		/// The data included in the block.
@@ -29,9 +34,9 @@
 		public string Data { get; }
 
 		/// <summary>
-		/// The creation timestamp of the block.
+		/// The creation timestamp of the block (seconds since 01.01.1970, UNIX epoch).
 		/// </summary>
-		public DateTime Timestamp { get; }
+		public long Timestamp { get; }
 
 		/// <summary>
 		/// A SHA256 hash taken from the content of the block.
@@ -44,9 +49,20 @@
 		public string PreviousHash { get; }
 
 		/// <summary>
+		/// The difficulty defines how many prefixing zeros the block hash must have to be valid.
+		/// The prefixing zeros are checked in the bianry format of the hash.
+		/// </summary>
+		public int Difficulty { get; }
+
+		/// <summary>
+		/// 
+		/// </summary>
+		public int Nonce { get; }
+
+		/// <summary>
 		/// The hard-coded genesis block of the blockchain.
 		/// </summary>
-		public static Block Genesis { get; } = new Block(0, null, DateTime.Parse("01.01.2018 00:00:00"), null);
+		public static Block Genesis { get; } = new Block(0, null, 1465154705, null, 0, 0);
 
 		/// <inheritdoc />
 		public override string ToString()

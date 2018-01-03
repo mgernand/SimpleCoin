@@ -111,7 +111,7 @@
 			}
 			else
 			{
-				this.logger.LogInformation("The received blockchain is not longer than the current blockcbhain. Do nothing.");
+				this.logger.LogInformation("The received blockchain is not longer than the current blockchain. Do nothing.");
 			}
 		}
 	}
