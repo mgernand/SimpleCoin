@@ -2,6 +2,9 @@
 {
 	public enum MessageType
 	{
-		Test
+		Test,
+		QueryLatest,
+		QueryAll,
+		ResponseBlockchain
 	}
 }

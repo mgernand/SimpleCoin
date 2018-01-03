@@ -2,6 +2,7 @@
 {
 	using System.Collections.Generic;
 	using System.Threading.Tasks;
+	using Blockchain;
 	using Microsoft.AspNetCore.Mvc;
 	using Microsoft.Extensions.Logging;
 	using Newtonsoft.Json;
@@ -14,11 +15,19 @@
 	{
 		private readonly ILogger<NodeController> logger;
 		private readonly WebSocketManager webSocketManager;
+		private readonly BlockchainManager blockchainManager;
+		private readonly BroadcastService broadcastService;
 
-		public NodeController(ILogger<NodeController> logger, WebSocketManager webSocketManager)
+		public NodeController(
+			ILogger<NodeController> logger, 
+			WebSocketManager webSocketManager, 
+			BlockchainManager blockchainManager, 
+			BroadcastService broadcastService)
 		{
 			this.logger = logger;
 			this.webSocketManager = webSocketManager;
+			this.blockchainManager = blockchainManager;
+			this.broadcastService = broadcastService;
 		}
 
 		/// <summary>
@@ -55,8 +64,8 @@
 				return this.BadRequest("Missing peer url.");
 			}
 
-			string peerAddress = data["peer"];
-			this.webSocketManager.ConnectToPeer(peerAddress);
+			string peerUrl = data["peer"];
+			this.webSocketManager.ConnectToPeer(peerUrl);
 
 			return this.Ok();
 		}
@@ -64,13 +73,42 @@
 		[HttpGet("hello")]
 		public async Task<IActionResult> SendToPeers()
 		{
-			await this.webSocketManager.BroadcastMessage(new Message
+			await this.broadcastService.BroadcastMessage(new Message
 			{
 				Type = MessageType.Test,
 				Data = JsonConvert.SerializeObject(new {text = "Hello, World!"})
 			});
 
 			return this.Ok();
+		}
+
+		/// <summary>
+		/// Get all blocks of the blockchain.
+		/// </summary>
+		/// <returns></returns>
+		[HttpGet("/blocks")]
+		public IActionResult GetBlockchain()
+		{
+			return this.Ok(this.blockchainManager.Blockchain);
+		}
+
+		/// <summary>
+		/// Add a new block to the blockchain.
+		/// </summary>
+		/// <param name="data"></param>
+		/// <returns></returns>
+		[HttpPost("/mineBlock")]
+		public IActionResult MineBlock([FromBody] IDictionary<string, string> data)
+		{
+			if (!data.ContainsKey("data"))
+			{
+				return this.BadRequest("Missing data.");
+			}
+
+			string stringData = data["data"];
+			Block newBlock = this.blockchainManager.GenerateNextBlock(stringData);
+
+			return this.Ok(newBlock);
 		}
 	}
 }

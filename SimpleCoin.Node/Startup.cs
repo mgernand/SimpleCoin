@@ -1,6 +1,7 @@
 ﻿namespace SimpleCoin.Node
 {
 	using System;
+	using Blockchain;
 	using Microsoft.AspNetCore.Builder;
 	using Microsoft.AspNetCore.Hosting;
 	using Microsoft.Extensions.Configuration;
@@ -8,7 +9,6 @@
 	using Microsoft.Extensions.Hosting;
 	using Microsoft.Extensions.Logging;
 	using PeerToPeer;
-	using WebSocketManager = PeerToPeer.WebSocketManager;
 
 	public class Startup
 	{
@@ -38,6 +38,8 @@
 			services.AddSingleton<WebSocketConnectionManager>();
 			services.AddTransient<MessageHandler>();
 			services.AddSingleton<IHostedService, PeerDiscoveryService>();
+			services.AddTransient<BroadcastService>();
+			services.AddSingleton<BlockchainManager>();
 		}
 
 		// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

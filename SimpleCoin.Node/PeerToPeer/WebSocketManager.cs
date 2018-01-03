@@ -16,21 +16,33 @@
 	public class WebSocketManager
 	{
 		private readonly ILogger<WebSocketManager> logger;
+		private readonly ILoggerFactory loggerFactory;
 		private readonly IOptions<ApplicationSettings> appSettings;
 		private readonly WebSocketConnectionManager connectionManager;
 		private readonly MessageHandler messageHandler;
+		private readonly BroadcastService broadcastService;
 
-		public WebSocketManager(ILogger<WebSocketManager> logger, IOptions<ApplicationSettings> appSettings, WebSocketConnectionManager connectionManager, MessageHandler messageHandler)
+		public WebSocketManager(
+			ILogger<WebSocketManager> logger, 
+			ILoggerFactory loggerFactory, 
+			IOptions<ApplicationSettings> appSettings, 
+			WebSocketConnectionManager connectionManager,
+			MessageHandler messageHandler,
+			BroadcastService broadcastService)
 		{
 			this.logger = logger;
+			this.loggerFactory = loggerFactory;
 			this.appSettings = appSettings;
 			this.connectionManager = connectionManager;
 			this.messageHandler = messageHandler;
+			this.broadcastService = broadcastService;
 		}
 
 		public async Task InitConnection(WebSocket socket, string url)
 		{
 			this.connectionManager.AddSocket(socket, url);
+
+			await socket.SendMessage(Message.CreateQueryChainLength());
 
 			await InitMessageHandler(socket, async (result, message) =>
 			{
@@ -127,14 +139,6 @@
 			return this.connectionManager.GetPeerUrls();
 		}
 
-		public async Task BroadcastMessage(Message message)
-		{
-			foreach (WebSocket socket in this.connectionManager.GetPeerWebSockets())
-			{
-				await socket.SendMessage(message);
-			}
-		}
-
 		public async Task Shutdown()
 		{
 			foreach (string url in this.GetPeerUrls())
@@ -156,5 +160,6 @@
 			WebSocket socket = this.connectionManager.GetSocketByUrl(url);
 			await this.connectionManager.RemoveSocket(socket);
 		}
+
 	}
 }

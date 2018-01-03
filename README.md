@@ -48,3 +48,17 @@ curl http://localhost:5000/peers
 curl http://localhost:5000/hello
 ```
 
+### Blockchain
+
+
+##### Get all blocks of the blockchain
+
+```
+curl http://localhost:5000/blocks
+```
+
+##### Create a new block
+
+```
+curl -H "Content-type:application/json" --data "{'data' : 'BLOCKDATA'}" http://localhost:5000/mineBlock
+``` 
