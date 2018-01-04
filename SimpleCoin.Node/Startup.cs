@@ -9,6 +9,7 @@
 	using Microsoft.Extensions.Hosting;
 	using Microsoft.Extensions.Logging;
 	using PeerToPeer;
+	using Transactions;
 
 	public class Startup
 	{
@@ -40,6 +41,7 @@
 			services.AddSingleton<IHostedService, PeerDiscoveryService>();
 			services.AddTransient<BroadcastService>();
 			services.AddSingleton<BlockchainManager>();
+			services.AddTransient<TransactionManager>();
 		}
 
 		// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

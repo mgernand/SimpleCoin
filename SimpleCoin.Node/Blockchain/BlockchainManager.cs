@@ -7,8 +7,11 @@
 	using System.Threading.Tasks;
 	using JetBrains.Annotations;
 	using Microsoft.CodeAnalysis.CSharp.Syntax;
+	using Microsoft.Extensions.DependencyInjection;
 	using Microsoft.Extensions.Logging;
+	using Newtonsoft.Json;
 	using PeerToPeer;
+	using Transactions;
 	using Util;
 
 	[UsedImplicitly]
@@ -16,13 +19,16 @@
 	{
 		private readonly ILogger<BlockchainManager> logger;
 		private readonly BroadcastService broadcastService;
+		private readonly TransactionManager transactionManager;
 
-		public BlockchainManager(ILogger<BlockchainManager> logger, BroadcastService broadcastService)
+		public BlockchainManager(ILogger<BlockchainManager> logger, BroadcastService broadcastService, TransactionManager transactionManager)
 		{
 			this.logger = logger;
 			this.broadcastService = broadcastService;
+			this.transactionManager = transactionManager;
 
 			this.Blockchain = new List<Block> { Block.Genesis };
+			this.UnspentTxOuts = new List<UnspentTxOut>();
 		}
 
 
@@ -31,19 +37,21 @@
 		/// </summary>
 		public IList<Block> Blockchain { get; set; }
 
+		public IList<UnspentTxOut> UnspentTxOuts { get; set; }
+
 		/// <summary>
 		/// Generate a new block.
 		/// </summary>
 		/// <param name="data"></param>
 		/// <returns></returns>
-		public Block GenerateNextBlock(string data)
+		public Block GenerateNextBlock(IList<Transaction> data)
 		{
 			Block previousBlock = this.Blockchain.GetLatestBlock();
 			int difficulty = this.GetDifficulty(this.Blockchain);
 
 			this.logger.LogInformation($"Difficulty: {difficulty}");
 
-			long nextIndex = previousBlock.Index + 1;
+			int nextIndex = previousBlock.Index + 1;
 			long nextTimestamp = GetCurrentTimestamp();
 
 			Block newBlock = this.FindBlock(nextIndex, data, nextTimestamp, previousBlock.Hash, difficulty);
@@ -76,7 +84,7 @@
 		}
 
 		/// <summary>
-		/// Adds a new block to tzhe chain if the block is valid.
+		/// Adds a new block to the chain if the block is valid.
 		/// </summary>
 		/// <param name="newBlock"></param>
 		/// <returns></returns>
@@ -84,8 +92,17 @@
 		{
 			if (this.IsValidBlock(newBlock, this.Blockchain.GetLatestBlock()))
 			{
-				this.Blockchain.Add(newBlock);
-				return true;
+				IList<UnspentTxOut> retVal = this.transactionManager.ProcessTransactions(newBlock.Data, this.UnspentTxOuts, newBlock.Index);
+				if (retVal == null)
+				{
+					return false;
+				}
+				else
+				{
+					this.Blockchain.Add(newBlock);
+					this.UnspentTxOuts = retVal;
+					return true;
+				}
 			}
 			return false;
 		}
@@ -109,7 +126,7 @@
 		/// <param name="previousHash"></param>
 		/// <param name="difficulty"></param>
 		/// <returns></returns>
-		private Block FindBlock(long index, string data, long timestamp, string previousHash, int difficulty)
+		private Block FindBlock(int index, IList<Transaction> data, long timestamp, string previousHash, int difficulty)
 		{
 			int nonce = 0;
 
@@ -124,7 +141,7 @@
 					stopwatch.Stop();
 					this.logger.LogInformation($"Found block. Duration: {stopwatch.ElapsedMilliseconds} ms");
 
-					return new Block(index, data, timestamp, previousHash, difficulty, nonce);
+					return new Block(index, data, timestamp, hash, previousHash, difficulty, nonce);
 				}
 
 				nonce++;
@@ -147,22 +164,22 @@
 		{
 			if (previousBlock.Index + 1 != newBlock.Index)
 			{
-				this.logger.LogError("Block validation error: invalid index");
+				this.logger.LogError("Invalid index");
 				return false;
 			}
 			else if (previousBlock.Hash != newBlock.PreviousHash)
 			{
-				this.logger.LogError("Block validation error: invalid previous hash");
+				this.logger.LogError("Invalid previous hash");
 				return false;
 			}
 			else if (!IsValidTimestamp(newBlock, previousBlock))
 			{
-				this.logger.LogError("Block validation: invalid timestamp");
+				this.logger.LogError("Invalid timestamp");
 				return false;
 			}
 			else if (!this.HasValidHash(newBlock))
 			{
-				this.logger.LogError("Block validation error: invalid hash");
+				this.logger.LogError("Invalid hash");
 				return false;
 			}
 
@@ -183,7 +200,7 @@
 
 			if (genesisBlock == null || !IsValidGenesisBlock(genesisBlock))
 			{
-				this.logger.LogError("Blockchain validation: invalid genesis block");
+				this.logger.LogError("Invalid genesis block");
 				return false;
 			}
 
@@ -299,11 +316,7 @@
 
 		private static bool IsValidGenesisBlock(Block genesisBlock)
 		{
-			return genesisBlock.Index == Block.Genesis.Index &&
-				   genesisBlock.Hash == Block.Genesis.Hash &&
-				   genesisBlock.PreviousHash == Block.Genesis.PreviousHash &&
-				   genesisBlock.Timestamp == Block.Genesis.Timestamp &&
-				   genesisBlock.Data == Block.Genesis.Data;
+			return JsonConvert.SerializeObject(genesisBlock) == JsonConvert.SerializeObject(Block.Genesis);
 		}
 
 		public Task BroadcastLastest()

@@ -2,6 +2,8 @@
 {
 	using System;
 	using System.Collections.Generic;
+	using System.Security.Cryptography;
+	using System.Text;
 
 	public static class StringExtensions
 	{
@@ -44,6 +46,20 @@
 			}
 
 			return prefix;
+		}
+
+		public static string CalculateHash(this string str)
+		{
+			byte[] bytes = Encoding.UTF8.GetBytes(str);
+
+			string hash = string.Empty;
+			byte[] hashBytes = new SHA256Managed().ComputeHash(bytes);
+			foreach (byte x in hashBytes)
+			{
+				hash += string.Format("{0:x2}", x);
+			}
+
+			return hash;
 		}
 	}
 }

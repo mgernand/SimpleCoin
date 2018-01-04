@@ -7,6 +7,7 @@
 	using Microsoft.Extensions.Logging;
 	using Newtonsoft.Json;
 	using PeerToPeer;
+	using Transactions;
 
 	/// <summary>
 	/// The controller which holds the nodes REST endpoints.
@@ -98,17 +99,26 @@
 		/// <param name="data"></param>
 		/// <returns></returns>
 		[HttpPost("/mineBlock")]
-		public IActionResult MineBlock([FromBody] IDictionary<string, string> data)
+		public IActionResult MineBlock([FromBody] IDictionary<string, object> data)
 		{
 			if (!data.ContainsKey("data"))
 			{
 				return this.BadRequest("Missing data.");
 			}
 
-			string stringData = data["data"];
-			Block newBlock = this.blockchainManager.GenerateNextBlock(stringData);
+			object transactionData = data["data"];
+			string jsonData = JsonConvert.SerializeObject(transactionData);
+			IList<Transaction> transactions = JsonConvert.DeserializeObject<IList<Transaction>>(jsonData);
+			Block newBlock = this.blockchainManager.GenerateNextBlock(transactions);
+
+			if (newBlock == null)
+			{
+				return this.BadRequest("Could not generate block.");
+			}
 
 			return this.Ok(newBlock);
 		}
+
+
 	}
 }

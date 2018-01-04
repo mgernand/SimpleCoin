@@ -1,6 +1,8 @@
 ﻿namespace SimpleCoin.Node.Blockchain
 {
 	using System;
+	using System.Collections.Generic;
+	using Transactions;
 
 	public sealed class Block
 	{
@@ -10,28 +12,26 @@
 		// In blocks.
 		public const int DifficultyAdjustmentInterval = 10;
 
-		public Block(long index, string data, long timestamp, string previousHash, int difficulty, int nonce)
+		public Block(int index, IList<Transaction> data, long timestamp, string hash, string previousHash, int difficulty, int nonce)
 		{
 			this.Index = index;
-			this.Data = data ?? string.Empty;
+			this.Data = data ?? new List<Transaction>();
 			this.Timestamp = timestamp;
+			this.Hash = hash;
 			this.PreviousHash = previousHash ?? string.Empty;
 			this.Difficulty = difficulty;
 			this.Nonce = nonce;
-
-			// Create the SHA256 hash for the block.
-			this.Hash = BlockExtensions.CalculateHash(index, previousHash, timestamp, data, difficulty, nonce);
 		}
 
 		/// <summary>
 		/// The height of the block in the chain.
 		/// </summary>
-		public long Index { get; }
+		public int Index { get; }
 
 		/// <summary>
 		/// The data included in the block.
 		/// </summary>
-		public string Data { get; }
+		public IList<Transaction> Data { get; }
 
 		/// <summary>
 		/// The creation timestamp of the block (seconds since 01.01.1970, UNIX epoch).
@@ -55,14 +55,14 @@
 		public int Difficulty { get; }
 
 		/// <summary>
-		/// 
+		/// Nonce to differ the block hash when finding the next block.
 		/// </summary>
 		public int Nonce { get; }
 
 		/// <summary>
 		/// The hard-coded genesis block of the blockchain.
 		/// </summary>
-		public static Block Genesis { get; } = new Block(0, null, 1465154705, null, 0, 0);
+		public static Block Genesis { get; } = new Block(0, null, 1465154705, "727987c5f8e9fcbd536386a59410ae0691f3e4047ec139dc56c56f5e6221e72f", null, 0, 0);
 
 		/// <inheritdoc />
 		public override string ToString()

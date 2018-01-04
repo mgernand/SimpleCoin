@@ -5,6 +5,9 @@
 	using System.Linq;
 	using System.Security.Cryptography;
 	using System.Text;
+	using Newtonsoft.Json;
+	using Transactions;
+	using Util;
 
 	public static class BlockExtensions
 	{
@@ -28,24 +31,15 @@
 		/// <param name="difficulty"></param>
 		/// <param name="nonce"></param>
 		/// <returns></returns>
-		public static string CalculateHash(long index, string previousHash, long timestamp, string data, int difficulty, int nonce)
+		public static string CalculateHash(long index, string previousHash, long timestamp, IList<Transaction> data, int difficulty, int nonce)
 		{
-			return CalculateHash(index.ToString(), previousHash, timestamp.ToString(), data, difficulty.ToString(), nonce.ToString());
+			return CalculateHash(index.ToString(), previousHash, timestamp.ToString(), JsonConvert.SerializeObject(data), difficulty.ToString(), nonce.ToString());
 		}
 
 		private static string CalculateHash(params string[] args)
 		{
 			string str = args.Aggregate((s1, s2) => s1 + s2);
-			byte[] bytes = Encoding.UTF8.GetBytes(str);
-
-			string hash = string.Empty;
-			byte[] hashBytes = new SHA256Managed().ComputeHash(bytes);
-			foreach (byte x in hashBytes)
-			{
-				hash += string.Format("{0:x2}", x);
-			}
-
-			return hash;
+			return str.CalculateHash();
 		}
 	}
 }
