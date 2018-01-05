@@ -2,7 +2,7 @@
 {
 	public class UnspentTxOut
 	{
-		public UnspentTxOut(string txOutId, int txOutIndex, string address, int amount)
+		public UnspentTxOut(string txOutId, int txOutIndex, string address, long amount)
 		{
 			this.TxOutId = txOutId;
 			this.TxOutIndex = txOutIndex;
@@ -16,6 +16,16 @@
 
 		public string Address { get; }
 
-		public int Amount { get; }
+		public long Amount { get; }
+
+		public TxIn ToUnsignedTxIn()
+		{
+			TxIn txIn = new TxIn
+			{
+				TxOutId = this.TxOutId,
+				TxOutIndex = this.TxOutIndex
+			};
+			return txIn;
+		}
 	}
 }

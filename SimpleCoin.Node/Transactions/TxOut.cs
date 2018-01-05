@@ -8,7 +8,7 @@
 	/// </summary>
 	public class TxOut
 	{
-		public TxOut(string address, int amount)
+		public TxOut(string address, long amount)
 		{
 			this.Address = address;
 			this.Amount = amount;
@@ -16,6 +16,6 @@
 
 		public string Address { get; }
 
-		public int Amount { get; }
+		public long Amount { get; }
 	}
 }

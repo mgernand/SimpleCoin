@@ -22,6 +22,12 @@
 			this.blockchainManager = blockchainManager;
 		}
 
+		/// <summary>
+		/// Handles the given message using a defined message handler method.
+		/// </summary>
+		/// <param name="socket"></param>
+		/// <param name="message"></param>
+		/// <returns></returns>
 		public async Task Handle(WebSocket socket, Message message)
 		{
 			switch (message.Type)

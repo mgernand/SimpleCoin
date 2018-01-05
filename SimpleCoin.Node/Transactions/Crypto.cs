@@ -5,15 +5,36 @@
 	using Org.BouncyCastle.Asn1.Sec;
 	using Org.BouncyCastle.Asn1.X9;
 	using Org.BouncyCastle.Crypto;
+	using Org.BouncyCastle.Crypto.Generators;
 	using Org.BouncyCastle.Crypto.Parameters;
 	using Org.BouncyCastle.Math;
-	using Org.BouncyCastle.Math.EC;
 	using Org.BouncyCastle.Security;
 	using Org.BouncyCastle.Utilities.Encoders;
+	using ECPoint = Org.BouncyCastle.Math.EC.ECPoint;
 
 	[UsedImplicitly]
 	public class Crypto
 	{
+		/// <summary>
+		/// Generates a new random private key.
+		/// </summary>
+		/// <returns></returns>
+		public static string GeneratePrivateKey()
+		{
+			ECKeyPairGenerator gen = new ECKeyPairGenerator();
+			SecureRandom secureRandom = new SecureRandom();
+			X9ECParameters ps = SecNamedCurves.GetByName("secp256k1");
+			ECDomainParameters ecParams = new ECDomainParameters(ps.Curve, ps.G, ps.N, ps.H);
+			ECKeyGenerationParameters keyGenParam = new ECKeyGenerationParameters(ecParams, secureRandom);
+			gen.Init(keyGenParam);
+
+			AsymmetricCipherKeyPair keyPair = gen.GenerateKeyPair();
+			ECPrivateKeyParameters privateKey = (ECPrivateKeyParameters)keyPair.Private;
+
+			byte[] privateKeyBytes = privateKey.D.ToByteArrayUnsigned();
+			return ByteArrayToString(privateKeyBytes);
+		}
+
 		/// <summary>
 		/// Creates a signature of the data to sign using the private key.
 		/// </summary>
@@ -52,7 +73,7 @@
 		}
 
 		/// <summary>
-		/// Verifiies the signature of the data to sign against the given signature using the public key.
+		/// Verifies the signature of the data to sign against the given signature using the public key.
 		/// </summary>
 		/// <param name="publicKey"></param>
 		/// <param name="dataToSign"></param>
@@ -87,13 +108,22 @@
 
 		private static ECPublicKeyParameters KeyFromPublic(string publicKey)
 		{
-			BigInteger publicKeyInt = new BigInteger(publicKey, 16);
-
 			X9ECParameters curve = SecNamedCurves.GetByName("secp256k1");
 			ECDomainParameters domain = new ECDomainParameters(curve.Curve, curve.G, curve.N, curve.H, curve.GetSeed());
 
 			ECPublicKeyParameters key = new ECPublicKeyParameters("ECDSA", curve.Curve.DecodePoint(Hex.Decode(publicKey)), domain);
 			return key;
+		}
+
+		private static string ByteArrayToString(byte[] bytes)
+		{
+			string str = string.Empty;
+			foreach (byte x in bytes)
+			{
+				str += string.Format("{0:x2}", x);
+			}
+
+			return str;
 		}
 	}
 }

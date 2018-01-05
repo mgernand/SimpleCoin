@@ -6,13 +6,12 @@
 	using System.Linq;
 	using System.Threading.Tasks;
 	using JetBrains.Annotations;
-	using Microsoft.CodeAnalysis.CSharp.Syntax;
-	using Microsoft.Extensions.DependencyInjection;
 	using Microsoft.Extensions.Logging;
 	using Newtonsoft.Json;
 	using PeerToPeer;
 	using Transactions;
 	using Util;
+	using Wallet;
 
 	[UsedImplicitly]
 	public class BlockchainManager
@@ -20,12 +19,18 @@
 		private readonly ILogger<BlockchainManager> logger;
 		private readonly BroadcastService broadcastService;
 		private readonly TransactionManager transactionManager;
+		private readonly WalletManager walletManager;
 
-		public BlockchainManager(ILogger<BlockchainManager> logger, BroadcastService broadcastService, TransactionManager transactionManager)
+		public BlockchainManager(
+			ILogger<BlockchainManager> logger, 
+			BroadcastService broadcastService, 
+			TransactionManager transactionManager,
+			WalletManager walletManager)
 		{
 			this.logger = logger;
 			this.broadcastService = broadcastService;
 			this.transactionManager = transactionManager;
+			this.walletManager = walletManager;
 
 			this.Blockchain = new List<Block> { Block.Genesis };
 			this.UnspentTxOuts = new List<UnspentTxOut>();
@@ -37,14 +42,17 @@
 		/// </summary>
 		public IList<Block> Blockchain { get; set; }
 
+		/// <summary>
+		/// The unspent transactions which make up the account balance.
+		/// </summary>
 		public IList<UnspentTxOut> UnspentTxOuts { get; set; }
 
 		/// <summary>
-		/// Generate a new block.
+		/// Generate a new raw block.
 		/// </summary>
-		/// <param name="data"></param>
+		/// <param name="blockData"></param>
 		/// <returns></returns>
-		public Block GenerateNextBlock(IList<Transaction> data)
+		public Block GenerateRawNextBlock(IList<Transaction> blockData)
 		{
 			Block previousBlock = this.Blockchain.GetLatestBlock();
 			int difficulty = this.GetDifficulty(this.Blockchain);
@@ -54,12 +62,54 @@
 			int nextIndex = previousBlock.Index + 1;
 			long nextTimestamp = GetCurrentTimestamp();
 
-			Block newBlock = this.FindBlock(nextIndex, data, nextTimestamp, previousBlock.Hash, difficulty);
+			Block newBlock = this.FindBlock(nextIndex, blockData, nextTimestamp, previousBlock.Hash, difficulty);
 
-			this.AddBlock(newBlock);
-			this.BroadcastLastest();
+			if (this.AddBlock(newBlock))
+			{
+				this.BroadcastLastest();
+				return newBlock;
+			}
+			else
+			{
+				return null;
+			}
+		}
 
-			return newBlock;
+		/// <summary>
+		/// Generate a new block containing only a coinbase transaction.
+		/// </summary>
+		/// <returns></returns>
+		public Block GenerateNextBlock()
+		{
+			Transaction coinbaseTx = this.transactionManager.GetCoinbaseTransaction(this.walletManager.GetPublicKeyFromWallet(), this.Blockchain.GetLatestBlock().Index + 1);
+			IList<Transaction> blockData = new List<Transaction> { coinbaseTx };
+			return this.GenerateRawNextBlock(blockData);
+		}
+
+		/// <summary>
+		/// Generate a new block containing a transaction.
+		/// </summary>
+		/// <param name="receiverAdress"></param>
+		/// <param name="amount"></param>
+		/// <returns></returns>
+		public Block GenerateNextBlockWithTransaction(string receiverAdress, long amount)
+		{
+			if (!this.transactionManager.IsValidAddress(receiverAdress))
+			{
+				this.logger.LogCritical("Invalid receiver address");
+				throw new InvalidOperationException("Invalid receiver address");
+			}
+
+			if (amount <= 0)
+			{
+				this.logger.LogCritical("Invalid amount");
+				throw new InvalidOperationException("Invalid amount");
+			}
+
+			Transaction coinbaseTx = this.transactionManager.GetCoinbaseTransaction(this.walletManager.GetPublicKeyFromWallet(), this.Blockchain.GetLatestBlock().Index + 1);
+			Transaction tx = this.walletManager.CreateTransaction(receiverAdress, amount, this.walletManager.GetPrivateKeyFromWallet(), this.UnspentTxOuts);
+			IList<Transaction> blockData = new List<Transaction> { coinbaseTx, tx };
+			return this.GenerateRawNextBlock(blockData);
 		}
 
 		/// <summary>
@@ -92,19 +142,29 @@
 		{
 			if (this.IsValidBlock(newBlock, this.Blockchain.GetLatestBlock()))
 			{
-				IList<UnspentTxOut> retVal = this.transactionManager.ProcessTransactions(newBlock.Data, this.UnspentTxOuts, newBlock.Index);
-				if (retVal == null)
+				IList<UnspentTxOut> result = this.transactionManager.ProcessTransactions(newBlock.Data, this.UnspentTxOuts, newBlock.Index);
+				if (result == null)
 				{
 					return false;
 				}
 				else
 				{
 					this.Blockchain.Add(newBlock);
-					this.UnspentTxOuts = retVal;
+					this.UnspentTxOuts = result;
 					return true;
 				}
 			}
+
 			return false;
+		}
+
+		/// <summary>
+		/// Gets the accoutn balance for the current account.
+		/// </summary>
+		/// <returns></returns>
+		public long GetAccountBalance()
+		{
+			return this.walletManager.GetBalance(this.walletManager.GetPublicKeyFromWallet(), this.UnspentTxOuts);
 		}
 
 		/// <summary>
@@ -279,7 +339,7 @@
 		/// <param name="newBlock"></param>
 		/// <param name="previousBlock"></param>
 		/// <returns></returns>
-		public static bool IsValidTimestamp(Block newBlock, Block previousBlock)
+		private static bool IsValidTimestamp(Block newBlock, Block previousBlock)
 		{
 			return (previousBlock.Timestamp - 60 < newBlock.Timestamp) && (newBlock.Timestamp - 60 < GetCurrentTimestamp());
 		}
@@ -295,6 +355,7 @@
 			if (!HashMatchesDifficulty(block.Hash, block.Difficulty))
 			{
 				this.logger.LogError($"Block difficulty not satisfied. Expected: {block.Difficulty} but got: {block.Hash}");
+				return false;
 			}
 
 			return true;

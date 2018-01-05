@@ -1,10 +1,7 @@
 ﻿namespace SimpleCoin.Node.Blockchain
 {
-	using System;
 	using System.Collections.Generic;
 	using System.Linq;
-	using System.Security.Cryptography;
-	using System.Text;
 	using Newtonsoft.Json;
 	using Transactions;
 	using Util;
