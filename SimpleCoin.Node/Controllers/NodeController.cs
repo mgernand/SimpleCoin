@@ -2,6 +2,7 @@
 {
 	using System;
 	using System.Collections.Generic;
+	using System.Linq;
 	using System.Reflection.Metadata.Ecma335;
 	using System.Threading.Tasks;
 	using Blockchain;
@@ -103,6 +104,24 @@
 		}
 
 		/// <summary>
+		/// Gets a specific block.
+		/// </summary>
+		/// <param name="hash"></param>
+		/// <returns></returns>
+		[HttpGet("block/{hash}")]
+		public IActionResult GetBlock(string hash)
+		{
+			Block block = this.blockchainManager.Blockchain.FirstOrDefault(x => x.Hash == hash);
+
+			if (block == null)
+			{
+				return this.NotFound(hash);
+			}
+
+			return this.Ok(block);
+		}
+
+		/// <summary>
 		/// Add a new block to the blockchain.
 		/// </summary>
 		/// <returns></returns>
@@ -158,6 +177,18 @@
 		}
 
 		/// <summary>
+		/// Gets the balance of a specific address.
+		/// </summary>
+		/// <param name="address"></param>
+		/// <returns></returns>
+		[HttpGet("balance/{address}")]
+		public IActionResult GetBalance(string address)
+		{
+			long balance = this.blockchainManager.GetAccountBalance(address);
+			return this.Ok(new { balance });
+		}
+
+		/// <summary>
 		/// Gets the public key (= wallet address).
 		/// </summary>
 		/// <returns></returns>
@@ -200,6 +231,11 @@
 			}
 		}
 
+		/// <summary>
+		/// Sends a transaction to the transaction pool to be processed.
+		/// </summary>
+		/// <param name="data"></param>
+		/// <returns></returns>
 		[HttpPost("sendTransaction")]
 		public IActionResult SendTransaction([FromBody] IDictionary<string, object> data)
 		{
@@ -229,13 +265,54 @@
 		}
 
 		/// <summary>
-		/// Gets the transaction pool
+		/// Gets the transaction pool.
 		/// </summary>
 		/// <returns></returns>
 		[HttpGet("/transactionPool")]
 		public IActionResult GetTransactionPool()
 		{
 			return this.Ok(this.transactionPoolManager.TransactionPool);
+		}
+
+		/// <summary>
+		/// Gets a specific transaction.
+		/// </summary>
+		/// <param name="id"></param>
+		/// <returns></returns>
+		[HttpGet("/transactions/{id}")]
+		public IActionResult GetTransaction(string id)
+		{
+			Transaction transaction = this.blockchainManager.Blockchain
+				.SelectMany(x => x.Data)
+				.FirstOrDefault(x => x.Id == id);
+
+			if (transaction == null)
+			{
+				return this.NotFound(id);
+			}
+
+			return this.Ok(transaction);
+		}
+
+		/// <summary>
+		/// Gets the unspent TxOuts of the given address.
+		/// </summary>
+		/// <param name="address"></param>
+		/// <returns></returns>
+		[HttpGet("/unspentTxOuts/{address}")]
+		public IActionResult GetUnspentTxOuts(string address)
+		{
+			return this.Ok(this.blockchainManager.GetUnspentTxOuts(address));
+		}
+
+		/// <summary>
+		/// Get the unspent TxOuts.
+		/// </summary>
+		/// <returns></returns>
+		[HttpGet("/unspentTxOuts")]
+		public IActionResult GetUnspentTxOuts()
+		{
+			return this.Ok(this.blockchainManager.UnspentTxOuts);
 		}
 
 		private static object GetErrorResult(string message)

@@ -190,17 +190,31 @@
 		}
 
 		/// <summary>
-		/// Gets the accoutn balance for the current account.
+		/// Gets the account balance for the current account.
 		/// </summary>
 		/// <returns></returns>
 		public long GetAccountBalance()
 		{
-			return this.walletManager.GetBalance(this.walletManager.GetPublicKeyFromWallet(), this.UnspentTxOuts);
+			return this.GetAccountBalance(this.walletManager.GetPublicKeyFromWallet());
 		}
 
-		private IList<UnspentTxOut> GetMyUnspentTxOuts()
+		/// <summary>
+		/// Gets the account balance for the given account.
+		/// </summary>
+		/// <returns></returns>
+		public long GetAccountBalance(string address)
 		{
-			return this.walletManager.FindUnspentTxOuts(this.walletManager.GetPublicKeyFromWallet(), this.UnspentTxOuts);
+			return this.walletManager.GetBalance(address, this.UnspentTxOuts);
+		}
+
+		/// <summary>
+		/// Get the unspent TxOuts of the given address.
+		/// </summary>
+		/// <param name="address"></param>
+		/// <returns></returns>
+		public IList<UnspentTxOut> GetUnspentTxOuts(string address)
+		{
+			return this.walletManager.FindUnspentTxOuts(address, this.UnspentTxOuts);
 		}
 
 		/// <summary>

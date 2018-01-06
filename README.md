@@ -53,9 +53,16 @@ curl http://localhost:5000/hello
 
 ##### Get all blocks of the blockchain
 
-```
+```bash
 curl http://localhost:5000/blocks
 ```
+
+##### Get a specific block
+
+```bash
+curl http://localhost:5000/block/{hash}
+```
+
 
 ##### Mine a block
 
@@ -68,7 +75,7 @@ curl -X POST http://localhost:5000/mineBlock
 
 ##### Mine transaction
 
-```
+```bash
 curl -H "Content-type: application/json" --data "{'address': '04bfcab8722991ae774db48f934ca79cfb7dd991229153b9f732ba5334aafcd8e7266e47076996b55a14bf9913ee3145ce0cfc1372ada8ada74bd287450313534b', 'amount' : 35}" http://localhost:5000/mineTransaction
 ```
 
@@ -76,23 +83,36 @@ The private-key: ```19f128debc1b9122da0635954488b208b829879cf13b3d6cac5d1260c0fd
 
 ##### Send transaction
 
-```
+```bash
 curl -H "Content-type: application/json" --data "{'address': '04bfcab8722991ae774db48f934ca79cfb7dd991229153b9f732ba5334aafcd8e7266e47076996b55a14bf9913ee3145ce0cfc1372ada8ada74bd287450313534b', 'amount' : 35}" http://localhost:5000/sendTransaction
 ```
 
 ##### Query transaction pool
-```
+
+```bash
 curl http://localhost:5000/transactionPool
+```
+
+##### Get a specific transaction
+
+```bash
+curl http://localhost:5000/transactions/{id}
 ```
 
 ##### Get balance
 
-```
+```bash
 curl http://localhost:5000/balance
+```
+
+##### Get balance of a specific address
+
+```bash
+curl http://localhost:5000/balance/{address}
 ```
 
 ##### Get wallet address
 
-```
+```bash
 curl http://localhost:5000/address
 ```
