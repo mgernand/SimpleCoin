@@ -46,14 +46,7 @@
 		{
 			this.connectionManager.AddSocket(socket, url);
 
-			await socket.SendMessage(Message.CreateQueryChainLength());
-
-			// Query transactions pool only some time after chain query
-			await Task.Delay(500);
-			await this.broadcastService.BroadcastTransactionPool(this.transactionPoolManager.TransactionPool);
-
-			// TODO: Move this before sending and broadcasting.
-			await InitMessageHandler(socket, async (result, message) =>
+			Task task = InitMessageHandler(socket, async (result, message) =>
 			{
 				if (result.MessageType == WebSocketMessageType.Text)
 				{
@@ -64,6 +57,14 @@
 					await this.connectionManager.RemoveSocket(socket);
 				}
 			});
+
+			await socket.SendMessage(Message.CreateQueryChainLength());
+
+			// Query transactions pool only some time after chain query.
+			await Task.Delay(500);
+			await this.broadcastService.BroadcastTransactionPool(this.transactionPoolManager.TransactionPool);
+
+			Task.WaitAll(task);
 		}
 
 		private static async Task InitMessageHandler(WebSocket socket, Action<WebSocketReceiveResult, Message> handleMessage)
