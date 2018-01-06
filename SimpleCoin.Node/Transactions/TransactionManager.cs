@@ -69,7 +69,7 @@
 			return signature;
 		}
 
-		private bool IsValidTransaction(Transaction transaction, IList<UnspentTxOut> unspentTxOuts)
+		public bool IsValidTransaction(Transaction transaction, IList<UnspentTxOut> unspentTxOuts)
 		{
 			if (Transaction.GetTransactionId(transaction) != transaction.Id)
 			{

@@ -74,6 +74,17 @@ curl -H "Content-type: application/json" --data "{'address': '04bfcab8722991ae77
 
 The private-key: ```19f128debc1b9122da0635954488b208b829879cf13b3d6cac5d1260c0fd967c```
 
+##### Send transaction
+
+```
+curl -H "Content-type: application/json" --data "{'address': '04bfcab8722991ae774db48f934ca79cfb7dd991229153b9f732ba5334aafcd8e7266e47076996b55a14bf9913ee3145ce0cfc1372ada8ada74bd287450313534b', 'amount' : 35}" http://localhost:5000/sendTransaction
+```
+
+##### Query transaction pool
+```
+curl http://localhost:5000/transactionPool
+```
+
 ##### Get balance
 
 ```

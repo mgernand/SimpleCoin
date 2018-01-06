@@ -2,6 +2,7 @@
 {
 	using System;
 	using System.Collections.Generic;
+	using System.Reflection.Metadata.Ecma335;
 	using System.Threading.Tasks;
 	using Blockchain;
 	using Microsoft.AspNetCore.Mvc;
@@ -21,19 +22,22 @@
 		private readonly BlockchainManager blockchainManager;
 		private readonly BroadcastService broadcastService;
 		private readonly WalletManager walletManager;
+		private readonly TransactionPoolManager transactionPoolManager;
 
 		public NodeController(
 			ILogger<NodeController> logger, 
 			WebSocketManager webSocketManager, 
 			BlockchainManager blockchainManager, 
 			BroadcastService broadcastService,
-			WalletManager walletManager)
+			WalletManager walletManager,
+			TransactionPoolManager transactionPoolManager)
 		{
 			this.logger = logger;
 			this.webSocketManager = webSocketManager;
 			this.blockchainManager = blockchainManager;
 			this.broadcastService = broadcastService;
 			this.walletManager = walletManager;
+			this.transactionPoolManager = transactionPoolManager;
 		}
 
 		/// <summary>
@@ -67,7 +71,7 @@
 		{
 			if (!data.ContainsKey("peer"))
 			{
-				return this.BadRequest("Missing peer url.");
+				return this.BadRequest(GetErrorResult("Missing peer url."));
 			}
 
 			string peerUrl = data["peer"];
@@ -82,7 +86,7 @@
 			await this.broadcastService.BroadcastMessage(new Message
 			{
 				Type = MessageType.Test,
-				Data = JsonConvert.SerializeObject(new {text = "Hello, World!"})
+				Data = JsonConvert.SerializeObject(new { text = "Hello, World!" })
 			});
 
 			return this.Ok();
@@ -109,7 +113,7 @@
 
 			if (newBlock == null)
 			{
-				return this.BadRequest("Could not generate block.");
+				return this.BadRequest(GetErrorResult("Could not generate block."));
 			}
 
 			return this.Ok(newBlock);
@@ -125,7 +129,7 @@
 		{
 			if (!data.ContainsKey("data"))
 			{
-				return this.BadRequest("Missing data.");
+				return this.BadRequest(GetErrorResult("Missing data."));
 			}
 
 			object transactionData = data["data"];
@@ -135,7 +139,7 @@
 
 			if (newBlock == null)
 			{
-				return this.BadRequest("Could not generate block.");
+				return this.BadRequest(GetErrorResult("Could not generate block."));
 			}
 
 			return this.Ok(newBlock);
@@ -173,12 +177,12 @@
 		{
 			if (!data.ContainsKey("address"))
 			{
-				return this.BadRequest("Missing address.");
+				return this.BadRequest(GetErrorResult("Missing address."));
 			}
 
 			if (!data.ContainsKey("amount"))
 			{
-				return this.BadRequest("Missing amount.");
+				return this.BadRequest(GetErrorResult("Missing amount."));
 			}
 
 			string address = (string) data["address"];
@@ -186,14 +190,57 @@
 
 			try
 			{
-				var response = this.blockchainManager.GenerateNextBlockWithTransaction(address, amount);
-				return this.Ok(response);
+				Block newBlock = this.blockchainManager.GenerateNextBlockWithTransaction(address, amount);
+				return this.Ok(newBlock);
 			}
 			catch (InvalidOperationException ex)
 			{
-				this.logger.LogError(ex, "Error generating block with transaction.");
-				return this.BadRequest(ex.Message);
+				this.logger.LogCritical(ex, "Error generating block with transaction.");
+				return this.BadRequest(GetErrorResult(ex.Message));
 			}
+		}
+
+		[HttpPost("sendTransaction")]
+		public IActionResult SendTransaction([FromBody] IDictionary<string, object> data)
+		{
+			if (!data.ContainsKey("address"))
+			{
+				return this.BadRequest(GetErrorResult("Missing address."));
+			}
+
+			if (!data.ContainsKey("amount"))
+			{
+				return this.BadRequest(GetErrorResult("Missing amount."));
+			}
+
+			string address = (string)data["address"];
+			long amount = (long)data["amount"];
+
+			try
+			{
+				Transaction transaction = this.blockchainManager.SendTransaction(address, amount);
+				return this.Ok(transaction);
+			}
+			catch (InvalidOperationException ex)
+			{
+				this.logger.LogCritical(ex, "Error generating block with transaction.");
+				return this.BadRequest(GetErrorResult(ex.Message));
+			}
+		}
+
+		/// <summary>
+		/// Gets the transaction pool
+		/// </summary>
+		/// <returns></returns>
+		[HttpGet("/transactionPool")]
+		public IActionResult GetTransactionPool()
+		{
+			return this.Ok(this.transactionPoolManager.TransactionPool);
+		}
+
+		private static object GetErrorResult(string message)
+		{
+			return new { message };
 		}
 	}
 }

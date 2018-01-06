@@ -61,7 +61,7 @@
 		/// <summary>
 		/// The hard-coded genesis block of the blockchain.
 		/// </summary>
-		public static Block Genesis { get; } = new Block(0, null, 1465154705, "727987c5f8e9fcbd536386a59410ae0691f3e4047ec139dc56c56f5e6221e72f", null, 0, 0);
+		public static Block Genesis { get; } = new Block(0, new List<Transaction> { Transaction.Genesis }, 1465154705, "d7bf36b454d358d7a73eec6e365d16669a32e9f3ca5f9d216112bd9d391230af", null, 0, 0);
 
 		/// <inheritdoc />
 		public override string ToString()

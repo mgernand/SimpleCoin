@@ -9,17 +9,26 @@
 	using JetBrains.Annotations;
 	using Microsoft.Extensions.Logging;
 	using Newtonsoft.Json;
+	using Transactions;
 
 	[UsedImplicitly]
 	public class MessageHandler
 	{
 		private readonly ILogger<MessageHandler> logger;
 		private readonly BlockchainManager blockchainManager;
+		private readonly TransactionPoolManager transactionPoolManager;
+		private readonly BroadcastService broadcastService;
 
-		public MessageHandler(ILogger<MessageHandler> logger, BlockchainManager blockchainManager)
+		public MessageHandler(
+			ILogger<MessageHandler> logger, 
+			BlockchainManager blockchainManager,
+			TransactionPoolManager transactionPoolManager,
+			BroadcastService broadcastService)
 		{
 			this.logger = logger;
 			this.blockchainManager = blockchainManager;
+			this.transactionPoolManager = transactionPoolManager;
+			this.broadcastService = broadcastService;
 		}
 
 		/// <summary>
@@ -41,8 +50,14 @@
 				case MessageType.QueryAll:
 					await this.QueryAll(socket);
 					break;
+				case MessageType.QueryTransactionPool:
+					await this.QueryTransactionPool(socket);
+					break;
 				case MessageType.ResponseBlockchain:
 					await this.ResponseBlockchain(message.Data);
+					break;
+				case MessageType.ResponseTransactionPool:
+					await this.ResponseTransactionPool(message.Data);
 					break;
 				default:
 					throw new ArgumentOutOfRangeException();
@@ -74,9 +89,14 @@
 			return socket.SendMessage(Message.CreateResponseChain(this.blockchainManager.Blockchain));
 		}
 
-		private async Task ResponseBlockchain(string data)
+		private Task QueryTransactionPool(WebSocket socket)
 		{
-			IList<Block> receivedBlocks = JsonConvert.DeserializeObject<IList<Block>>(data);
+			return socket.SendMessage(Message.CreateQueryTransactionPool());
+		}
+
+		private async Task ResponseBlockchain(string messageData)
+		{
+			IList<Block> receivedBlocks = JsonConvert.DeserializeObject<IList<Block>>(messageData);
 
 			if (receivedBlocks == null)
 			{
@@ -118,6 +138,34 @@
 			else
 			{
 				this.logger.LogInformation("The received blockchain is not longer than the current blockchain. Do nothing.");
+			}
+		}
+
+		private async Task ResponseTransactionPool(string messageData)
+		{
+			IList<Transaction> receivedTransactions = JsonConvert.DeserializeObject<IList<Transaction>>(messageData);
+
+			if (receivedTransactions == null)
+			{
+				this.logger.LogError("Invalid transaction received");
+				return;
+			}
+
+			foreach (Transaction transaction in receivedTransactions)
+			{
+				try
+				{
+					this.transactionPoolManager.AddToTransactionPool(transaction, this.blockchainManager.UnspentTxOuts);
+
+					// If no error is thrown, transaction was indeed added to the pool.
+					// So let's broadcast transaction pool.
+
+					await this.broadcastService.BroadcastTransactionPool(this.transactionPoolManager.TransactionPool);
+				}
+				catch (InvalidOperationException ex)
+				{
+					this.logger.LogError(ex, "Unconfirmed transaction not valid (we probably already have it in our pool)");
+				}
 			}
 		}
 	}

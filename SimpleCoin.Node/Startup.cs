@@ -44,6 +44,7 @@
 			services.AddSingleton<BlockchainManager>();
 			services.AddTransient<TransactionManager>();
 			services.AddTransient<WalletManager>();
+			services.AddSingleton<TransactionPoolManager>();
 		}
 
 		// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

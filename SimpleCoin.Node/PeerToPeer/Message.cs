@@ -3,6 +3,7 @@
 	using System.Collections.Generic;
 	using Blockchain;
 	using Newtonsoft.Json;
+	using Transactions;
 
 	public class Message
 	{
@@ -61,6 +62,24 @@
 			{
 				Type = MessageType.ResponseBlockchain,
 				Data = JsonConvert.SerializeObject(new List<Block>{ blockchain.GetLatestBlock() })
+			};
+		}
+
+		public static Message CreateResponseTransactionPool(IList<Transaction> transactionPool)
+		{
+			return new Message
+			{
+				Type = MessageType.ResponseTransactionPool,
+				Data = JsonConvert.SerializeObject(transactionPool)
+			};
+		}
+
+		public static Message CreateQueryTransactionPool()
+		{
+			return new Message
+			{
+				Type = MessageType.QueryTransactionPool,
+				Data = null,
 			};
 		}
 	}

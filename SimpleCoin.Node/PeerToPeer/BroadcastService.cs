@@ -6,6 +6,7 @@
 	using Blockchain;
 	using JetBrains.Annotations;
 	using Microsoft.Extensions.Logging;
+	using Transactions;
 
 	[UsedImplicitly]
 	public class BroadcastService
@@ -49,6 +50,11 @@
 		public Task BroadcastQueryAll()
 		{
 			return this.BroadcastMessage(Message.CreateQueryAll());
+		}
+
+		public Task BroadcastTransactionPool(IList<Transaction> transactionPool)
+		{
+			return this.BroadcastMessage(Message.CreateResponseTransactionPool(transactionPool));
 		}
 	}
 }

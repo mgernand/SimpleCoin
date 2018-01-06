@@ -1,6 +1,7 @@
 ﻿namespace SimpleCoin.Node.Transactions
 {
-	public class UnspentTxOut
+	using System;
+	public class UnspentTxOut : ICloneable
 	{
 		public UnspentTxOut(string txOutId, int txOutIndex, string address, long amount)
 		{
@@ -26,6 +27,12 @@
 				TxOutIndex = this.TxOutIndex
 			};
 			return txIn;
+		}
+
+		/// <inheritdoc />
+		public object Clone()
+		{
+			return new UnspentTxOut(this.TxOutId, this.TxOutIndex, this.Address, this.Amount);
 		}
 	}
 }

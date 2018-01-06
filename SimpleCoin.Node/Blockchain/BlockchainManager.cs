@@ -8,6 +8,7 @@
 	using JetBrains.Annotations;
 	using Microsoft.Extensions.Logging;
 	using Newtonsoft.Json;
+	using Org.BouncyCastle.Utilities.Collections;
 	using PeerToPeer;
 	using Transactions;
 	using Util;
@@ -20,22 +21,28 @@
 		private readonly BroadcastService broadcastService;
 		private readonly TransactionManager transactionManager;
 		private readonly WalletManager walletManager;
+		private readonly TransactionPoolManager transactionPoolManager;
+
+		private IList<UnspentTxOut> unspentTxOuts;
 
 		public BlockchainManager(
 			ILogger<BlockchainManager> logger, 
 			BroadcastService broadcastService, 
 			TransactionManager transactionManager,
-			WalletManager walletManager)
+			WalletManager walletManager,
+			TransactionPoolManager transactionPoolManager)
 		{
 			this.logger = logger;
 			this.broadcastService = broadcastService;
 			this.transactionManager = transactionManager;
 			this.walletManager = walletManager;
+			this.transactionPoolManager = transactionPoolManager;
 
 			this.Blockchain = new List<Block> { Block.Genesis };
-			this.UnspentTxOuts = new List<UnspentTxOut>();
-		}
 
+			// The unspent txOut of genesis block is set to unspentTxOuts on startup.
+			this.unspentTxOuts = transactionManager.ProcessTransactions(this.Blockchain.First().Data, new List<UnspentTxOut>(), 0);
+		}
 
 		/// <summary>
 		/// In-memory stored blockchain.
@@ -45,7 +52,15 @@
 		/// <summary>
 		/// The unspent transactions which make up the account balance.
 		/// </summary>
-		public IList<UnspentTxOut> UnspentTxOuts { get; set; }
+		public IList<UnspentTxOut> UnspentTxOuts
+		{
+			get { return this.unspentTxOuts.Select(uTxOut => (UnspentTxOut)uTxOut.Clone()).ToList(); }
+			private set
+			{
+				this.logger.LogInformation($"Replacing unspentTxOuts (count: {this.unspentTxOuts.Count}) with new values (count: {value.Count})");
+				this.unspentTxOuts = value;
+			}
+		}
 
 		/// <summary>
 		/// Generate a new raw block.
@@ -82,19 +97,20 @@
 		public Block GenerateNextBlock()
 		{
 			Transaction coinbaseTx = this.transactionManager.GetCoinbaseTransaction(this.walletManager.GetPublicKeyFromWallet(), this.Blockchain.GetLatestBlock().Index + 1);
-			IList<Transaction> blockData = new List<Transaction> { coinbaseTx };
+			List<Transaction> blockData = new List<Transaction> { coinbaseTx };
+			blockData.AddRange(this.transactionPoolManager.TransactionPool);
 			return this.GenerateRawNextBlock(blockData);
 		}
 
 		/// <summary>
 		/// Generate a new block containing a transaction.
 		/// </summary>
-		/// <param name="receiverAdress"></param>
+		/// <param name="receiverAddress"></param>
 		/// <param name="amount"></param>
 		/// <returns></returns>
-		public Block GenerateNextBlockWithTransaction(string receiverAdress, long amount)
+		public Block GenerateNextBlockWithTransaction(string receiverAddress, long amount)
 		{
-			if (!this.transactionManager.IsValidAddress(receiverAdress))
+			if (!this.transactionManager.IsValidAddress(receiverAddress))
 			{
 				this.logger.LogCritical("Invalid receiver address");
 				throw new InvalidOperationException("Invalid receiver address");
@@ -107,9 +123,17 @@
 			}
 
 			Transaction coinbaseTx = this.transactionManager.GetCoinbaseTransaction(this.walletManager.GetPublicKeyFromWallet(), this.Blockchain.GetLatestBlock().Index + 1);
-			Transaction tx = this.walletManager.CreateTransaction(receiverAdress, amount, this.walletManager.GetPrivateKeyFromWallet(), this.UnspentTxOuts);
+			Transaction tx = this.walletManager.CreateTransaction(receiverAddress, amount, this.walletManager.GetPrivateKeyFromWallet(), this.UnspentTxOuts, this.transactionPoolManager.TransactionPool);
 			IList<Transaction> blockData = new List<Transaction> { coinbaseTx, tx };
 			return this.GenerateRawNextBlock(blockData);
+		}
+
+		public Transaction SendTransaction(string receiverAddress, long amount)
+		{
+			Transaction tx = this.walletManager.CreateTransaction(receiverAddress, amount, this.walletManager.GetPrivateKeyFromWallet(), this.UnspentTxOuts, this.transactionPoolManager.TransactionPool);
+			this.transactionPoolManager.AddToTransactionPool(tx, this.UnspentTxOuts);
+			this.broadcastService.BroadcastTransactionPool(this.transactionPoolManager.TransactionPool);
+			return tx;
 		}
 
 		/// <summary>
@@ -121,10 +145,15 @@
 		/// <param name="newBlockchain"></param>
 		public void ReplaceChain(IList<Block> newBlockchain)
 		{
-			if (this.IsValidChain(newBlockchain) && GetAccumulatedDifficulty(newBlockchain) > GetAccumulatedDifficulty(this.Blockchain))
+			IList<UnspentTxOut> resultUnspentTxOuts = this.IsValidChain(newBlockchain);
+			bool isValidChain = resultUnspentTxOuts != null;
+
+			if (isValidChain && GetAccumulatedDifficulty(newBlockchain) > GetAccumulatedDifficulty(this.Blockchain))
 			{
-				this.logger.LogInformation("Received blockchain is valid. Replacing the current blockchain with the received blockchain.");
+				this.logger.LogInformation("Received blockchain is valid. Replacing the current blockchain with the received blockchain");
 				this.Blockchain = newBlockchain;
+				this.UnspentTxOuts = resultUnspentTxOuts;
+				this.transactionPoolManager.UpdateTransactionPool(this.unspentTxOuts);
 				this.BroadcastLastest();
 			}
 			else
@@ -142,15 +171,17 @@
 		{
 			if (this.IsValidBlock(newBlock, this.Blockchain.GetLatestBlock()))
 			{
-				IList<UnspentTxOut> result = this.transactionManager.ProcessTransactions(newBlock.Data, this.UnspentTxOuts, newBlock.Index);
-				if (result == null)
+				IList<UnspentTxOut> resultUnspentTxOuts = this.transactionManager.ProcessTransactions(newBlock.Data, this.UnspentTxOuts, newBlock.Index);
+				if (resultUnspentTxOuts == null)
 				{
+					this.logger.LogError("Block is not valid in terms of transactions");
 					return false;
 				}
 				else
 				{
 					this.Blockchain.Add(newBlock);
-					this.UnspentTxOuts = result;
+					this.UnspentTxOuts = resultUnspentTxOuts;
+					this.transactionPoolManager.UpdateTransactionPool(this.unspentTxOuts);
 					return true;
 				}
 			}
@@ -165,6 +196,11 @@
 		public long GetAccountBalance()
 		{
 			return this.walletManager.GetBalance(this.walletManager.GetPublicKeyFromWallet(), this.UnspentTxOuts);
+		}
+
+		private IList<UnspentTxOut> GetMyUnspentTxOuts()
+		{
+			return this.walletManager.FindUnspentTxOuts(this.walletManager.GetPublicKeyFromWallet(), this.UnspentTxOuts);
 		}
 
 		/// <summary>
@@ -254,25 +290,38 @@
 		/// </summary>
 		/// <param name="blockchain"></param>
 		/// <returns></returns>
-		private bool IsValidChain(IList<Block> blockchain)
+		private IList<UnspentTxOut> IsValidChain(IList<Block> blockchain)
 		{
 			Block genesisBlock = blockchain.FirstOrDefault();
 
 			if (genesisBlock == null || !IsValidGenesisBlock(genesisBlock))
 			{
 				this.logger.LogError("Invalid genesis block");
-				return false;
+				return null;
 			}
+
+			// Validate each block in the chain. The block is valid if the block structure is valid
+			// and the transaction are valid.
+			IList<UnspentTxOut> unspentTxOuts = new List<UnspentTxOut>();
 
 			for (int i = 1; i < blockchain.Count; i++)
 			{
-				if (!this.IsValidBlock(blockchain[i], blockchain[i - 1]))
+				Block currentBlock = blockchain[i];
+
+				if (i != 0 && !this.IsValidBlock(blockchain[i], blockchain[i - 1]))
 				{
-					return false;
+					return null;
+				}
+
+				unspentTxOuts = this.transactionManager.ProcessTransactions(currentBlock.Data, unspentTxOuts, currentBlock.Index);
+				if (unspentTxOuts == null)
+				{
+					this.logger.LogError("Invalid transactions in blockchain");
+					return null;
 				}
 			}
 
-			return true;
+			return unspentTxOuts;
 		}
 
 		/// <summary>

@@ -11,6 +11,7 @@
 	using Microsoft.Extensions.Logging;
 	using Microsoft.Extensions.Options;
 	using Newtonsoft.Json;
+	using Transactions;
 
 	[UsedImplicitly]
 	public class WebSocketManager
@@ -21,6 +22,7 @@
 		private readonly WebSocketConnectionManager connectionManager;
 		private readonly MessageHandler messageHandler;
 		private readonly BroadcastService broadcastService;
+		private readonly TransactionPoolManager transactionPoolManager;
 
 		public WebSocketManager(
 			ILogger<WebSocketManager> logger, 
@@ -28,7 +30,8 @@
 			IOptions<ApplicationSettings> appSettings, 
 			WebSocketConnectionManager connectionManager,
 			MessageHandler messageHandler,
-			BroadcastService broadcastService)
+			BroadcastService broadcastService,
+			TransactionPoolManager transactionPoolManager)
 		{
 			this.logger = logger;
 			this.loggerFactory = loggerFactory;
@@ -36,6 +39,7 @@
 			this.connectionManager = connectionManager;
 			this.messageHandler = messageHandler;
 			this.broadcastService = broadcastService;
+			this.transactionPoolManager = transactionPoolManager;
 		}
 
 		public async Task InitConnection(WebSocket socket, string url)
@@ -44,6 +48,11 @@
 
 			await socket.SendMessage(Message.CreateQueryChainLength());
 
+			// Query transactions pool only some time after chain query
+			await Task.Delay(500);
+			await this.broadcastService.BroadcastTransactionPool(this.transactionPoolManager.TransactionPool);
+
+			// TODO: Move this before sending and broadcasting.
 			await InitMessageHandler(socket, async (result, message) =>
 			{
 				if (result.MessageType == WebSocketMessageType.Text)

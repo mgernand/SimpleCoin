@@ -57,6 +57,17 @@
 			this.logger.LogInformation("New wallet with private key created.");
 		}
 
+		public void DeleteWallet()
+		{
+			string path = Path.Combine("node", this.options.Value.Port.ToString(), "wallet");
+			string privateKeyFilePath = Path.Combine(path, "private_key");
+
+			if (File.Exists(privateKeyFilePath))
+			{
+				File.Delete(privateKeyFilePath);
+			}
+		}
+
 		/// <summary>
 		/// Loads the private key from the key file.
 		/// </summary>
@@ -91,7 +102,7 @@
 			return unspentTxOuts
 				.Where(uTxOut => uTxOut.Address == address)
 				.Select(uTxOut => uTxOut.Amount)
-			.Sum();
+				.Sum();
 		}
 
 		/// <summary>
@@ -102,11 +113,15 @@
 		/// <param name="privateKey"></param>
 		/// <param name="unspentTxOuts"></param>
 		/// <returns></returns>
-		public Transaction CreateTransaction(string receiverAdress, long amount, string privateKey, IList<UnspentTxOut> unspentTxOuts)
+		public Transaction CreateTransaction(string receiverAdress, long amount, string privateKey, IList<UnspentTxOut> unspentTxOuts, IList<Transaction> transactionPool)
 		{
-			string myAddress = Crypto.GetPublicKey(privateKey);
-			IList<UnspentTxOut> myUnspentTxOuts = unspentTxOuts.Where(uTxOut => uTxOut.Address == myAddress).ToList();
+			this.logger.LogInformation($"Transaction pool size: {transactionPool.Count}");
 
+			string myAddress = Crypto.GetPublicKey(privateKey);
+			IList<UnspentTxOut> myUnspentTxOutsA = unspentTxOuts.Where(uTxOut => uTxOut.Address == myAddress).ToList();
+			IList<UnspentTxOut> myUnspentTxOuts = this.FilterTransactionPoolTransactions(myUnspentTxOutsA, transactionPool);
+
+			// Filter from unspentOutputs such inputs that are referenced in pool.
 			(IList<UnspentTxOut> includedUnspentTxOuts, long leftOverAmount) = this.FindTxOutsForAmount(amount, myUnspentTxOuts);
 
 			IList<TxIn> unsignedTxIns = includedUnspentTxOuts.Select(uTxOut => uTxOut.ToUnsignedTxIn()).ToList();
@@ -125,6 +140,36 @@
 			}).ToList();
 
 			return tx;
+		}
+
+		public IList<UnspentTxOut> FindUnspentTxOuts(string ownerAddress, IList<UnspentTxOut> unspentTxOuts)
+		{
+			return unspentTxOuts.Where(uTxOut => uTxOut.Address == ownerAddress).ToList();
+		}
+
+		public IList<UnspentTxOut> FilterTransactionPoolTransactions(IList<UnspentTxOut> unspentTxOuts, IList<Transaction> transactionPool)
+		{
+			IList<TxIn> txIns = transactionPool
+				.SelectMany(tx => tx.TxIns)
+				.ToList();
+
+			IList<UnspentTxOut> removable = new List<UnspentTxOut>();
+
+			foreach (UnspentTxOut unspentTxOut in unspentTxOuts)
+			{
+				TxIn txIn = txIns.FirstOrDefault(aTxIn =>aTxIn.TxOutIndex == unspentTxOut.TxOutIndex && aTxIn.TxOutId == unspentTxOut.TxOutId);
+
+				if (txIn == null)
+				{
+					 // TODO
+				}
+				else
+				{
+					removable.Add(unspentTxOut);
+				}
+			}
+
+			return unspentTxOuts.Except(removable).ToList();
 		}
 
 		private (IList<UnspentTxOut>, long) FindTxOutsForAmount(long amount, IList<UnspentTxOut> myUnspentTxOuts)

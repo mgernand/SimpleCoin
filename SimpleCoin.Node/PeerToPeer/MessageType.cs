@@ -8,6 +8,8 @@
 		Test,
 		QueryLatest,
 		QueryAll,
-		ResponseBlockchain
+		ResponseBlockchain,
+		QueryTransactionPool,
+		ResponseTransactionPool
 	}
 }
