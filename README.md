@@ -84,7 +84,7 @@ curl -H "Content-type: application/json" --data "{'address': '04bfcab8722991ae77
 ##### Query transaction pool
 
 ```bash
-curl http://localhost:5000/transactions
+curl http://localhost:5000/transaction_pool_
 ```
 
 ##### Get a specific transaction
