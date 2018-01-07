@@ -8,6 +8,7 @@
 	using JetBrains.Annotations;
 	using Microsoft.Extensions.Logging;
 	using Microsoft.Extensions.Options;
+	using Org.BouncyCastle.Asn1.Esf;
 	using Transactions;
 
 	[UsedImplicitly]
@@ -112,6 +113,7 @@
 		/// <param name="amount"></param>
 		/// <param name="privateKey"></param>
 		/// <param name="unspentTxOuts"></param>
+		/// <param name="transactionPool"></param>
 		/// <returns></returns>
 		public Transaction CreateTransaction(string receiverAdress, long amount, string privateKey, IList<UnspentTxOut> unspentTxOuts, IList<Transaction> transactionPool)
 		{
@@ -168,15 +170,15 @@
 			return unspentTxOuts.Except(removable).ToList();
 		}
 
-		private static (IList<UnspentTxOut>, long) FindTxOutsForAmount(long amount, IList<UnspentTxOut> myUnspentTxOuts)
+		private static (IList<UnspentTxOut>, long) FindTxOutsForAmount(long amount, IList<UnspentTxOut> unspentTxOuts)
 		{
 			long currentAmount = 0;
 			IList<UnspentTxOut> includedUnspentTxOuts = new List<UnspentTxOut>();
 
-			foreach (UnspentTxOut myUnspentTxOut in myUnspentTxOuts)
+			foreach (UnspentTxOut unspentTxOut in unspentTxOuts)
 			{
-				includedUnspentTxOuts.Add(myUnspentTxOut);
-				currentAmount += myUnspentTxOut.Amount;
+				includedUnspentTxOuts.Add(unspentTxOut);
+				currentAmount += unspentTxOut.Amount;
 
 				if (currentAmount >= amount)
 				{
@@ -185,7 +187,10 @@
 				}
 			}
 
-			throw new InvalidOperationException("Not enough coins to send in transaction.");
+			string message = "Can't create transaction from the available unspent transaction outputs. " +
+							 $"Required amount: {amount}. " +
+							 $"Available amount: {currentAmount}.";
+			throw new InvalidOperationException(message);
 		}
 
 		private static IList<TxOut> CreateTxOuts(string receiverAddress, string myAddress, long amount, long leftOverAmount)
