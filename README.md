@@ -33,7 +33,7 @@ curl http://localhost:5000/ping
 ##### Add a peer
 
 ```bash
-curl -H "Content-type:application/json" --data "{'peer': 'localhost:5001'}" http://localhost:5000/addPeer
+curl -H "Content-type:application/json" --data "{'peer': 'localhost:5001'}" http://localhost:5000/peers
 ```
 
 ##### Query connected peers
@@ -41,12 +41,6 @@ curl -H "Content-type:application/json" --data "{'peer': 'localhost:5001'}" http
 ```bash
 curl http://localhost:5000/peers
 ``` 
-
-##### Send a test message to connected nodes
-
-```bash
-curl http://localhost:5000/hello
-```
 
 ### Blockchain
 
@@ -60,7 +54,7 @@ curl http://localhost:5000/blocks
 ##### Get a specific block
 
 ```bash
-curl http://localhost:5000/block/{hash}
+curl http://localhost:5000/blocks/{hash}
 ```
 
 
@@ -90,7 +84,7 @@ curl -H "Content-type: application/json" --data "{'address': '04bfcab8722991ae77
 ##### Query transaction pool
 
 ```bash
-curl http://localhost:5000/transactionPool
+curl http://localhost:5000/transactions
 ```
 
 ##### Get a specific transaction

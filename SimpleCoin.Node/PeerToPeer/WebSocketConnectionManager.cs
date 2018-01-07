@@ -10,7 +10,7 @@
 	using JetBrains.Annotations;
 
 	[UsedImplicitly]
-	public class WebSocketConnectionManager
+	public class WebSocketConnectionManager : IWebSocketConnectionManager
 	{
 		private readonly ConcurrentDictionary<string, WebSocket> sockets = new ConcurrentDictionary<string, WebSocket>();
 

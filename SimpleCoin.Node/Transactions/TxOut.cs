@@ -1,6 +1,7 @@
 ﻿namespace SimpleCoin.Node.Transactions
 {
 	using System;
+
 	/// <summary>
 	/// Transaction outputs (txOut) consists of an address and an amount of coins. 
 	/// The address is an ECDSA public-key. This means that the user having the 

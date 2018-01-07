@@ -14,27 +14,24 @@
 	using Transactions;
 
 	[UsedImplicitly]
-	public class WebSocketManager
+	public class WebSocketManager : IWebSocketManager
 	{
 		private readonly ILogger<WebSocketManager> logger;
-		private readonly ILoggerFactory loggerFactory;
 		private readonly IOptions<ApplicationSettings> appSettings;
-		private readonly WebSocketConnectionManager connectionManager;
-		private readonly MessageHandler messageHandler;
-		private readonly BroadcastService broadcastService;
-		private readonly TransactionPoolManager transactionPoolManager;
+		private readonly IWebSocketConnectionManager connectionManager;
+		private readonly IMessageHandler messageHandler;
+		private readonly IBroadcastService broadcastService;
+		private readonly ITransactionPoolManager transactionPoolManager;
 
 		public WebSocketManager(
 			ILogger<WebSocketManager> logger, 
-			ILoggerFactory loggerFactory, 
-			IOptions<ApplicationSettings> appSettings, 
-			WebSocketConnectionManager connectionManager,
-			MessageHandler messageHandler,
-			BroadcastService broadcastService,
-			TransactionPoolManager transactionPoolManager)
+			IOptions<ApplicationSettings> appSettings,
+			IWebSocketConnectionManager connectionManager,
+			IMessageHandler messageHandler,
+			IBroadcastService broadcastService,
+			ITransactionPoolManager transactionPoolManager)
 		{
 			this.logger = logger;
-			this.loggerFactory = loggerFactory;
 			this.appSettings = appSettings;
 			this.connectionManager = connectionManager;
 			this.messageHandler = messageHandler;

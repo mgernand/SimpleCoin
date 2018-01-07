@@ -9,7 +9,7 @@
 	using Newtonsoft.Json;
 
 	[UsedImplicitly]
-	public class TransactionManager
+	public class TransactionManager : ITransactionManager
 	{
 		private readonly ILogger<TransactionManager> logger;
 
@@ -18,26 +18,9 @@
 			this.logger = logger;
 		}
 
-		public Transaction GetCoinbaseTransaction(string address, int blockIndex)
-		{
-			Transaction transaction = new Transaction();
-			TxIn txIn = new TxIn
-			{
-				Signature = "",
-				TxOutId = "",
-				TxOutIndex = blockIndex,
-			};
-
-			transaction.TxIns.Add(txIn);
-			transaction.TxOuts.Add(new TxOut(address, Transaction.CoinbaseAmount));
-			transaction.Id = Transaction.GetTransactionId(transaction);
-
-			return transaction;
-		}
-
 
 		/// <summary>
-		/// TODO
+		/// Signs the given transaction with the given private key.
 		/// </summary>
 		/// <param name="transaction"></param>
 		/// <param name="txInIndex"></param>
@@ -116,26 +99,20 @@
 			// Check for duplicate txIns. Each txIn can be included only once.
 			IList<TxIn> txIns = transactions.SelectMany(tx => tx.TxIns).ToList();
 
-			if (this.HasDuplicates(txIns))
+			if (HasDuplicates(txIns))
 			{
 				this.logger.LogError("Found duplicated txIns");
 				return false;
 			}
 
-			// All but coinbase transactions
+			// All but coinbase transactions.
 			IList<Transaction> normalTransactions = transactions.Skip(1).ToList();
-
-			if (normalTransactions.Any())
-			{
-				return normalTransactions
-					.Select(tx => this.IsValidTransaction(tx, unspentTxOuts))
-					.Aggregate((a, b) => a && b);
-			}
-
-			return true;
+			return normalTransactions
+				.Select(tx => this.IsValidTransaction(tx, unspentTxOuts))
+				.Aggregate(true, (a, b) => a && b);
 		}
 
-		private bool HasDuplicates(IList<TxIn> txIns)
+		private static bool HasDuplicates(IList<TxIn> txIns)
 		{
 			List<string> duplicateKeys = txIns.GroupBy(txIn => txIn.TxOutId)
 				.Where(group => group.Count() > 1)
@@ -196,13 +173,6 @@
 			return unspentTxOuts.FirstOrDefault(uTxOut => uTxOut.TxOutId == transactionId && uTxOut.TxOutIndex == index);
 		}
 
-		/// <summary>
-		/// 
-		/// </summary>
-		/// <param name="txIn"></param>
-		/// <param name="transaction"></param>
-		/// <param name="unspentTxOuts"></param>
-		/// <returns></returns>
 		private bool IsValidTxIn(TxIn txIn, Transaction transaction, IList<UnspentTxOut> unspentTxOuts)
 		{
 			UnspentTxOut referencedUnspentTxOut = unspentTxOuts
@@ -225,16 +195,26 @@
 			return true;
 		}
 
-		private IList<UnspentTxOut> UpdateUnspentTxOuts(IList<Transaction> newTransactions, IList<UnspentTxOut> unspentTxOuts)
+		public IList<UnspentTxOut> ProcessTransactions(IList<Transaction> transactions, IList<UnspentTxOut> unspentTxOuts, int blockIndex)
 		{
-			IList<UnspentTxOut> newUnspentTxOuts = newTransactions
-				.Select(tx => tx.TxOuts.Select((txOut, index) => new UnspentTxOut(tx.Id, index, txOut.Address, txOut.Amount)))
-				.Aggregate((a, b) => a.Concat(b))
-				.ToList();
+			if (!this.ValidateBlockTransactions(transactions, unspentTxOuts, blockIndex))
+			{
+				this.logger.LogError("Invalid block transactions");
+				return null;
+			}
 
-			IList<UnspentTxOut> consumedTxOuts = newTransactions
+			return UpdateUnspentTxOuts(transactions, unspentTxOuts);
+		}
+
+		private static IList<UnspentTxOut> UpdateUnspentTxOuts(IList<Transaction> transactions, IList<UnspentTxOut> unspentTxOuts)
+		{
+			IList<UnspentTxOut> newUnspentTxOuts = transactions
+				.Select(tx => tx.TxOuts.Select((txOut, index) => new UnspentTxOut(tx.Id, index, txOut.Address, txOut.Amount)))
+				.Aggregate(new List<UnspentTxOut>(), (a, b) => a.Concat(b).ToList());
+
+			IList<UnspentTxOut> consumedTxOuts = transactions
 				.Select(tx => tx.TxIns)
-				.Aggregate((a, b) => new List<TxIn>(a.Concat(b)))
+				.Aggregate(new List<TxIn>(), (a, b) => a.Concat(b).ToList())
 				.Select(txIn => new UnspentTxOut(txIn.TxOutId, txIn.TxOutIndex, string.Empty, 0))
 				.ToList();
 
@@ -246,16 +226,6 @@
 			return resultingUnspentTxOuts;
 		}
 
-		public IList<UnspentTxOut> ProcessTransactions(IList<Transaction> transactions, IList<UnspentTxOut> unspentTxOuts, int blockIndex)
-		{
-			if (!this.ValidateBlockTransactions(transactions, unspentTxOuts, blockIndex))
-			{
-				this.logger.LogError("Invalid block transactions");
-				return null;
-			}
-
-			return this.UpdateUnspentTxOuts(transactions, unspentTxOuts);
-		}
 
 		/// <summary>
 		/// Valid address is a valid ecdsa public key in the 04 + X-coordinate + Y-coordinate format.

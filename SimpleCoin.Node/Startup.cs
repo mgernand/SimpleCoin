@@ -2,6 +2,7 @@
 {
 	using System;
 	using Blockchain;
+	using JetBrains.Annotations;
 	using Microsoft.AspNetCore.Builder;
 	using Microsoft.AspNetCore.Hosting;
 	using Microsoft.Extensions.Configuration;
@@ -12,14 +13,15 @@
 	using Transactions;
 	using Wallet;
 
-	public class Startup
+	[UsedImplicitly]
+	public sealed class Startup
 	{
 		public Startup(IConfiguration configuration)
 		{
 			this.Configuration = configuration;
 		}
 
-		public IConfiguration Configuration { get; }
+		private IConfiguration Configuration { get; }
 
 		// This method gets called by the runtime. Use this method to add services to the container.
 		public void ConfigureServices(IServiceCollection services)
@@ -36,21 +38,21 @@
 				options.Port = (ushort) selfUri.Port;
 			});
 
-			services.AddTransient<WebSocketManager>();
-			services.AddSingleton<WebSocketConnectionManager>();
-			services.AddTransient<MessageHandler>();
+			services.AddTransient<IWebSocketManager, WebSocketManager>();
+			services.AddSingleton<IWebSocketConnectionManager, WebSocketConnectionManager>();
+			services.AddTransient<IMessageHandler, MessageHandler>();
+			services.AddTransient<IBroadcastService, BroadcastService>();
 			services.AddSingleton<IHostedService, PeerDiscoveryService>();
-			services.AddTransient<BroadcastService>();
-			services.AddSingleton<BlockchainManager>();
-			services.AddTransient<TransactionManager>();
-			services.AddTransient<WalletManager>();
-			services.AddSingleton<TransactionPoolManager>();
+			services.AddSingleton<IBlockchainManager, BlockchainManager>();
+			services.AddTransient<ITransactionManager, TransactionManager>();
+			services.AddSingleton<ITransactionPoolManager, TransactionPoolManager>();
+			services.AddTransient<IWalletManager, WalletManager>();
 		}
 
 		// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
 		public void Configure(IApplicationBuilder app, IHostingEnvironment env, IServiceProvider serviceProvider)
 		{
-			WalletManager walletManager = serviceProvider.GetService<WalletManager>();
+			IWalletManager walletManager = serviceProvider.GetService<IWalletManager>();
 			walletManager.InitWallet();
 
 			app.UseWebSockets();
@@ -58,7 +60,7 @@
 
 			app.Map("/ws", x => x.UseMiddleware<WebSocketMiddleware>(
 				serviceProvider.GetService<ILogger<WebSocketMiddleware>>(), 
-				serviceProvider.GetService<WebSocketManager>()));
+				serviceProvider.GetService<IWebSocketManager>()));
 		}
 	}
 }

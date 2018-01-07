@@ -8,29 +8,30 @@
 	using JetBrains.Annotations;
 	using Microsoft.Extensions.Logging;
 	using Newtonsoft.Json;
-	using Org.BouncyCastle.Utilities.Collections;
 	using PeerToPeer;
 	using Transactions;
 	using Util;
 	using Wallet;
 
 	[UsedImplicitly]
-	public class BlockchainManager
+	public class BlockchainManager : IBlockchainManager
 	{
+		private static readonly object syncRoot = new object();
+
 		private readonly ILogger<BlockchainManager> logger;
-		private readonly BroadcastService broadcastService;
-		private readonly TransactionManager transactionManager;
-		private readonly WalletManager walletManager;
-		private readonly TransactionPoolManager transactionPoolManager;
+		private readonly IBroadcastService broadcastService;
+		private readonly ITransactionManager transactionManager;
+		private readonly IWalletManager walletManager;
+		private readonly ITransactionPoolManager transactionPoolManager;
 
 		private IList<UnspentTxOut> unspentTxOuts;
 
 		public BlockchainManager(
-			ILogger<BlockchainManager> logger, 
-			BroadcastService broadcastService, 
-			TransactionManager transactionManager,
-			WalletManager walletManager,
-			TransactionPoolManager transactionPoolManager)
+			ILogger<BlockchainManager> logger,
+			IBroadcastService broadcastService,
+			ITransactionManager transactionManager,
+			IWalletManager walletManager,
+			ITransactionPoolManager transactionPoolManager)
 		{
 			this.logger = logger;
 			this.broadcastService = broadcastService;
@@ -47,14 +48,14 @@
 		/// <summary>
 		/// In-memory stored blockchain.
 		/// </summary>
-		public IList<Block> Blockchain { get; set; }
+		public IList<Block> Blockchain { get; private set; }
 
 		/// <summary>
 		/// The unspent transactions which make up the account balance.
 		/// </summary>
 		public IList<UnspentTxOut> UnspentTxOuts
 		{
-			get { return this.unspentTxOuts.Select(uTxOut => (UnspentTxOut)uTxOut.Clone()).ToList(); }
+			get => this.unspentTxOuts.Clone();
 			private set
 			{
 				this.logger.LogInformation($"Replacing unspentTxOuts (count: {this.unspentTxOuts.Count}) with new values (count: {value.Count})");
@@ -79,7 +80,7 @@
 
 			Block newBlock = this.FindBlock(nextIndex, blockData, nextTimestamp, previousBlock.Hash, difficulty);
 
-			if (this.AddBlock(newBlock))
+			if (this.AddBlockToChain(newBlock))
 			{
 				this.BroadcastLastest();
 				return newBlock;
@@ -96,7 +97,7 @@
 		/// <returns></returns>
 		public Block GenerateNextBlock()
 		{
-			Transaction coinbaseTx = this.transactionManager.GetCoinbaseTransaction(this.walletManager.GetPublicKeyFromWallet(), this.Blockchain.GetLatestBlock().Index + 1);
+			Transaction coinbaseTx = this.GetCoinbaseTransaction();
 			List<Transaction> blockData = new List<Transaction> { coinbaseTx };
 			blockData.AddRange(this.transactionPoolManager.TransactionPool);
 			return this.GenerateRawNextBlock(blockData);
@@ -122,18 +123,18 @@
 				throw new InvalidOperationException("Invalid amount");
 			}
 
-			Transaction coinbaseTx = this.transactionManager.GetCoinbaseTransaction(this.walletManager.GetPublicKeyFromWallet(), this.Blockchain.GetLatestBlock().Index + 1);
-			Transaction tx = this.walletManager.CreateTransaction(receiverAddress, amount, this.walletManager.GetPrivateKeyFromWallet(), this.UnspentTxOuts, this.transactionPoolManager.TransactionPool);
-			IList<Transaction> blockData = new List<Transaction> { coinbaseTx, tx };
+			Transaction coinbaseTx = this.GetCoinbaseTransaction();
+			Transaction transaction = this.CreateTransaction(receiverAddress, amount);
+			IList<Transaction> blockData = new List<Transaction> { coinbaseTx, transaction };
 			return this.GenerateRawNextBlock(blockData);
 		}
 
 		public Transaction SendTransaction(string receiverAddress, long amount)
 		{
-			Transaction tx = this.walletManager.CreateTransaction(receiverAddress, amount, this.walletManager.GetPrivateKeyFromWallet(), this.UnspentTxOuts, this.transactionPoolManager.TransactionPool);
-			this.transactionPoolManager.AddToTransactionPool(tx, this.UnspentTxOuts);
+			Transaction transaction = this.CreateTransaction(receiverAddress, amount);
+			this.transactionPoolManager.AddToTransactionPool(transaction, this.UnspentTxOuts);
 			this.broadcastService.BroadcastTransactionPool(this.transactionPoolManager.TransactionPool);
-			return tx;
+			return transaction;
 		}
 
 		/// <summary>
@@ -167,26 +168,29 @@
 		/// </summary>
 		/// <param name="newBlock"></param>
 		/// <returns></returns>
-		public bool AddBlock(Block newBlock)
+		public bool AddBlockToChain(Block newBlock)
 		{
-			if (this.IsValidBlock(newBlock, this.Blockchain.GetLatestBlock()))
+			lock (syncRoot)
 			{
-				IList<UnspentTxOut> resultUnspentTxOuts = this.transactionManager.ProcessTransactions(newBlock.Data, this.UnspentTxOuts, newBlock.Index);
-				if (resultUnspentTxOuts == null)
+				if (this.IsValidBlock(newBlock, this.Blockchain.GetLatestBlock()))
 				{
-					this.logger.LogError("Block is not valid in terms of transactions");
-					return false;
+					IList<UnspentTxOut> result = this.transactionManager.ProcessTransactions(newBlock.Data, this.UnspentTxOuts, newBlock.Index);
+					if (result == null)
+					{
+						this.logger.LogError("Block is not valid in terms of transactions");
+						return false;
+					}
+					else
+					{
+						this.Blockchain.Add(newBlock);
+						this.UnspentTxOuts = result;
+						this.transactionPoolManager.UpdateTransactionPool(this.unspentTxOuts);
+						return true;
+					}
 				}
-				else
-				{
-					this.Blockchain.Add(newBlock);
-					this.UnspentTxOuts = resultUnspentTxOuts;
-					this.transactionPoolManager.UpdateTransactionPool(this.unspentTxOuts);
-					return true;
-				}
-			}
 
-			return false;
+				return false;
+			}
 		}
 
 		/// <summary>
@@ -214,17 +218,7 @@
 		/// <returns></returns>
 		public IList<UnspentTxOut> GetUnspentTxOuts(string address)
 		{
-			return this.walletManager.FindUnspentTxOuts(address, this.UnspentTxOuts);
-		}
-
-		/// <summary>
-		/// Gets a current timestamp in seconds.
-		/// </summary>
-		/// <returns></returns>
-		private static long GetCurrentTimestamp()
-		{
-			long timestamp = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).Ticks / TimeSpan.TicksPerSecond;
-			return timestamp;
+			return WalletManager.FindUnspentTxOuts(address, this.UnspentTxOuts);
 		}
 
 		/// <summary>
@@ -257,6 +251,35 @@
 				nonce++;
 			}
 
+		}
+
+		/// <summary>
+		/// Gets a current timestamp in seconds.
+		/// </summary>
+		/// <returns></returns>
+		private static long GetCurrentTimestamp()
+		{
+			long timestamp = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).Ticks / TimeSpan.TicksPerSecond;
+			return timestamp;
+		}
+
+		/// <summary>
+		/// Get the coinbase transaction for this wallet.
+		/// </summary>
+		/// <returns></returns>
+		private Transaction GetCoinbaseTransaction()
+		{
+			Transaction coinbaseTx = Transaction.GetCoinbaseTransaction(
+				this.walletManager.GetPublicKeyFromWallet(),
+				this.Blockchain.GetLatestBlock().Index + 1);
+			return coinbaseTx;
+		}
+
+		private Transaction CreateTransaction(string receiverAddress, long amount)
+		{
+			Transaction tx = this.walletManager.CreateTransaction(receiverAddress, amount,
+				this.walletManager.GetPrivateKeyFromWallet(), this.UnspentTxOuts, this.transactionPoolManager.TransactionPool);
+			return tx;
 		}
 
 		/// <summary>
@@ -316,7 +339,7 @@
 
 			// Validate each block in the chain. The block is valid if the block structure is valid
 			// and the transaction are valid.
-			IList<UnspentTxOut> unspentTxOuts = new List<UnspentTxOut>();
+			IList<UnspentTxOut> aUnspentTxOuts = new List<UnspentTxOut>();
 
 			for (int i = 1; i < blockchain.Count; i++)
 			{
@@ -327,15 +350,15 @@
 					return null;
 				}
 
-				unspentTxOuts = this.transactionManager.ProcessTransactions(currentBlock.Data, unspentTxOuts, currentBlock.Index);
-				if (unspentTxOuts == null)
+				aUnspentTxOuts = this.transactionManager.ProcessTransactions(currentBlock.Data, aUnspentTxOuts, currentBlock.Index);
+				if (aUnspentTxOuts == null)
 				{
 					this.logger.LogError("Invalid transactions in blockchain");
 					return null;
 				}
 			}
 
-			return unspentTxOuts;
+			return aUnspentTxOuts;
 		}
 
 		/// <summary>

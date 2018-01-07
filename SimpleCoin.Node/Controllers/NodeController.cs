@@ -3,7 +3,6 @@
 	using System;
 	using System.Collections.Generic;
 	using System.Linq;
-	using System.Reflection.Metadata.Ecma335;
 	using System.Threading.Tasks;
 	using Blockchain;
 	using Microsoft.AspNetCore.Mvc;
@@ -14,24 +13,24 @@
 	using Wallet;
 
 	/// <summary>
-	/// The controller which holds the nodes REST endpoints.
+	/// The controller with the nodes REST endpoints.
 	/// </summary>
 	public class NodeController : Controller
 	{
 		private readonly ILogger<NodeController> logger;
-		private readonly WebSocketManager webSocketManager;
-		private readonly BlockchainManager blockchainManager;
-		private readonly BroadcastService broadcastService;
-		private readonly WalletManager walletManager;
-		private readonly TransactionPoolManager transactionPoolManager;
+		private readonly IWebSocketManager webSocketManager;
+		private readonly IBlockchainManager blockchainManager;
+		private readonly IBroadcastService broadcastService;
+		private readonly IWalletManager walletManager;
+		private readonly ITransactionPoolManager transactionPoolManager;
 
 		public NodeController(
-			ILogger<NodeController> logger, 
-			WebSocketManager webSocketManager, 
-			BlockchainManager blockchainManager, 
-			BroadcastService broadcastService,
-			WalletManager walletManager,
-			TransactionPoolManager transactionPoolManager)
+			ILogger<NodeController> logger,
+			IWebSocketManager webSocketManager,
+			IBlockchainManager blockchainManager,
+			IBroadcastService broadcastService,
+			IWalletManager walletManager,
+			ITransactionPoolManager transactionPoolManager)
 		{
 			this.logger = logger;
 			this.webSocketManager = webSocketManager;
@@ -52,6 +51,22 @@
 		}
 
 		/// <summary>
+		/// Send a test broadcast to all connected peers.
+		/// </summary>
+		/// <returns></returns>
+		[HttpGet("hello")]
+		public async Task<IActionResult> SendToPeers()
+		{
+			await this.broadcastService.BroadcastMessage(new Message
+			{
+				Type = MessageType.Test,
+				Data = JsonConvert.SerializeObject(new { text = "Hello, World!" })
+			});
+
+			return this.Ok();
+		}
+
+		/// <summary>
 		/// Gets the connected peers of the node.
 		/// </summary>
 		/// <returns></returns>
@@ -68,6 +83,7 @@
 		/// <param name="data"></param>
 		/// <returns></returns>
 		[HttpPost("addPeer")]
+		[HttpPost("peers")]
 		public IActionResult AddPeer([FromBody] IDictionary<string, string> data)
 		{
 			if (!data.ContainsKey("peer"))
@@ -77,18 +93,6 @@
 
 			string peerUrl = data["peer"];
 			this.webSocketManager.ConnectToPeer(peerUrl);
-
-			return this.Ok();
-		}
-
-		[HttpGet("hello")]
-		public async Task<IActionResult> SendToPeers()
-		{
-			await this.broadcastService.BroadcastMessage(new Message
-			{
-				Type = MessageType.Test,
-				Data = JsonConvert.SerializeObject(new { text = "Hello, World!" })
-			});
 
 			return this.Ok();
 		}
@@ -109,16 +113,110 @@
 		/// <param name="hash"></param>
 		/// <returns></returns>
 		[HttpGet("block/{hash}")]
+		[HttpGet("blocks/{hash}")]
 		public IActionResult GetBlock(string hash)
 		{
 			Block block = this.blockchainManager.Blockchain.FirstOrDefault(x => x.Hash == hash);
 
 			if (block == null)
 			{
-				return this.NotFound(hash);
+				return this.NotFound(GetErrorResult($"Block with hash {hash} not found."));
 			}
 
 			return this.Ok(block);
+		}
+
+		/// <summary>
+		/// Gets a specific transaction.
+		/// </summary>
+		/// <param name="id"></param>
+		/// <returns></returns>
+		[HttpGet("/transaction/{id}")]
+		[HttpGet("/transactions/{id}")]
+		public IActionResult GetTransaction(string id)
+		{
+			Transaction transaction = this.blockchainManager.Blockchain
+				.SelectMany(x => x.Data)
+				.FirstOrDefault(x => x.Id == id);
+
+			if (transaction == null)
+			{
+				return this.NotFound(GetErrorResult($"Transaction with id {id} not found."));
+			}
+
+			return this.Ok(transaction);
+		}
+
+		/// <summary>
+		/// Gets the unspent transaction outputs of the given address.
+		/// </summary>
+		/// <param name="address"></param>
+		/// <returns></returns>
+		[HttpGet("/address/{address}")]
+		[HttpGet("/uTxOuts/{address}")]
+		[HttpGet("/unspentTxOuts/{address}")]
+		[HttpGet("/unspentTransactionOutputs/{address}")]
+		public IActionResult GetUnspentTxOuts(string address)
+		{
+			return this.Ok(this.blockchainManager.GetUnspentTxOuts(address));
+		}
+
+		/// <summary>
+		/// Get the unspent transaction outputs.
+		/// </summary>
+		/// <returns></returns>
+		[HttpGet("/uTxOuts")]
+		[HttpGet("/unspentTxOuts")]
+		[HttpGet("/unspentTransactionOutputs")]
+		public IActionResult GetUnspentTxOuts()
+		{
+			return this.Ok(this.blockchainManager.UnspentTxOuts);
+		}
+
+		/// <summary>
+		/// Gets the unspent transaction outputs owned by the wallet.
+		/// </summary>
+		/// <returns></returns>
+		[HttpGet("/myUTxOuts")]
+		[HttpGet("/myUnspentTxOuts")]
+		[HttpGet("/myUnspentTransactionOutputs")]
+		public IActionResult GetMyUnspentTxOuts()
+		{
+			return this.Ok(this.blockchainManager.GetUnspentTxOuts(this.walletManager.GetPublicKeyFromWallet()));
+		}
+
+		/// <summary>
+		/// Gets the account balance of the wallet.
+		/// </summary>
+		/// <returns></returns>
+
+		[HttpGet("/balance")]
+		public IActionResult GetBalance()
+		{
+			long balance = this.blockchainManager.GetAccountBalance();
+			return this.Ok(new { balance });
+		}
+
+		/// <summary>
+		/// Gets the balance of a specific address.
+		/// </summary>
+		/// <param name="address"></param>
+		/// <returns></returns>
+		[HttpGet("balance/{address}")]
+		public IActionResult GetBalance(string address)
+		{
+			long balance = this.blockchainManager.GetAccountBalance(address);
+			return this.Ok(new { balance });
+		}
+
+		/// <summary>
+		/// Gets the public key (= wallet address) of the wallet.
+		/// </summary>
+		/// <returns></returns>
+		[HttpGet("/address")]
+		public IActionResult GetAddress()
+		{
+			return this.Ok(new { address = this.walletManager.GetPublicKeyFromWallet() });
 		}
 
 		/// <summary>
@@ -165,40 +263,6 @@
 		}
 
 		/// <summary>
-		/// Gets the account balance.
-		/// </summary>
-		/// <returns></returns>
-
-		[HttpGet("/balance")]
-		public IActionResult GetBalance()
-		{
-			long balance = this.blockchainManager.GetAccountBalance();
-			return this.Ok(new { balance });
-		}
-
-		/// <summary>
-		/// Gets the balance of a specific address.
-		/// </summary>
-		/// <param name="address"></param>
-		/// <returns></returns>
-		[HttpGet("balance/{address}")]
-		public IActionResult GetBalance(string address)
-		{
-			long balance = this.blockchainManager.GetAccountBalance(address);
-			return this.Ok(new { balance });
-		}
-
-		/// <summary>
-		/// Gets the public key (= wallet address).
-		/// </summary>
-		/// <returns></returns>
-		[HttpGet("/address")]
-		public IActionResult GetAddress()
-		{
-			return this.Ok(new { address = this.walletManager.GetPublicKeyFromWallet() });
-		}
-
-		/// <summary>
 		/// Adds a new block with generated transaction data from receiver account and amount.
 		/// </summary>
 		/// <param name="data"></param>
@@ -232,7 +296,7 @@
 		}
 
 		/// <summary>
-		/// Sends a transaction to the transaction pool to be processed.
+		/// Sends a transaction to the network to be processed.
 		/// </summary>
 		/// <param name="data"></param>
 		/// <returns></returns>
@@ -265,54 +329,14 @@
 		}
 
 		/// <summary>
-		/// Gets the transaction pool.
+		/// Gets the unconfirmed transactions.
 		/// </summary>
 		/// <returns></returns>
 		[HttpGet("/transactionPool")]
+		[HttpGet("/transaction_pool")]
 		public IActionResult GetTransactionPool()
 		{
 			return this.Ok(this.transactionPoolManager.TransactionPool);
-		}
-
-		/// <summary>
-		/// Gets a specific transaction.
-		/// </summary>
-		/// <param name="id"></param>
-		/// <returns></returns>
-		[HttpGet("/transactions/{id}")]
-		public IActionResult GetTransaction(string id)
-		{
-			Transaction transaction = this.blockchainManager.Blockchain
-				.SelectMany(x => x.Data)
-				.FirstOrDefault(x => x.Id == id);
-
-			if (transaction == null)
-			{
-				return this.NotFound(id);
-			}
-
-			return this.Ok(transaction);
-		}
-
-		/// <summary>
-		/// Gets the unspent TxOuts of the given address.
-		/// </summary>
-		/// <param name="address"></param>
-		/// <returns></returns>
-		[HttpGet("/unspentTxOuts/{address}")]
-		public IActionResult GetUnspentTxOuts(string address)
-		{
-			return this.Ok(this.blockchainManager.GetUnspentTxOuts(address));
-		}
-
-		/// <summary>
-		/// Get the unspent TxOuts.
-		/// </summary>
-		/// <returns></returns>
-		[HttpGet("/unspentTxOuts")]
-		public IActionResult GetUnspentTxOuts()
-		{
-			return this.Ok(this.blockchainManager.UnspentTxOuts);
 		}
 
 		private static object GetErrorResult(string message)

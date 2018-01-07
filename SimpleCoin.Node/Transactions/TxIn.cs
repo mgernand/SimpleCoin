@@ -1,6 +1,7 @@
 ﻿namespace SimpleCoin.Node.Transactions
 {
 	using System;
+
 	/// <summary>
 	/// Transaction inputs (txIn) provide the information “where” the coins are coming from. 
 	/// Each txIn refer to an earlier output, from which the coins are ‘unlocked’, with the 

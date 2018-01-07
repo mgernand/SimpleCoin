@@ -9,12 +9,14 @@
 	using Transactions;
 
 	[UsedImplicitly]
-	public class BroadcastService
+	public class BroadcastService : IBroadcastService
 	{
 		private readonly ILogger<BroadcastService> logger;
-		private readonly WebSocketConnectionManager connectionManager;
+		private readonly IWebSocketConnectionManager connectionManager;
 
-		public BroadcastService(ILogger<BroadcastService> logger, WebSocketConnectionManager connectionManager)
+		public BroadcastService(
+			ILogger<BroadcastService> logger, 
+			IWebSocketConnectionManager connectionManager)
 		{
 			this.logger = logger;
 			this.connectionManager = connectionManager;

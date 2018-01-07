@@ -18,14 +18,17 @@
 
 		private readonly ILogger<PeerDiscoveryService> logger;
 		private readonly IOptions<ApplicationSettings> appSettings;
-		private readonly WebSocketManager webSocketManager;
+		private readonly IWebSocketManager webSocketManager;
 
 		private readonly IList<string> seedNodeUrls = new List<string>
 		{
 			"localhost:5000"
 		};
 
-		public PeerDiscoveryService(ILogger<PeerDiscoveryService> logger, IOptions<ApplicationSettings> appSettings, WebSocketManager webSocketManager)
+		public PeerDiscoveryService(
+			ILogger<PeerDiscoveryService> logger, 
+			IOptions<ApplicationSettings> appSettings, 
+			IWebSocketManager webSocketManager)
 		{
 			this.logger = logger;
 			this.appSettings = appSettings;

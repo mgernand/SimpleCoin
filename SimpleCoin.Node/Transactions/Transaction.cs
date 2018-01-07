@@ -6,7 +6,7 @@
 	using System.Linq;
 	using Util;
 
-	public class Transaction : ICloneable
+	public sealed class Transaction : ICloneable, IEquatable<Transaction>
 	{
 		public const int CoinbaseAmount = 50;
 
@@ -58,6 +58,24 @@
 			Id = "e655f6a5f26dc9b4cac6e46f52336428287759cf81ef5ff10854f69d68f43fa3"
 		};
 
+
+		public static Transaction GetCoinbaseTransaction(string address, int blockIndex)
+		{
+			Transaction transaction = new Transaction();
+			TxIn txIn = new TxIn
+			{
+				Signature = "",
+				TxOutId = "",
+				TxOutIndex = blockIndex,
+			};
+
+			transaction.TxIns.Add(txIn);
+			transaction.TxOuts.Add(new TxOut(address, CoinbaseAmount));
+			transaction.Id = GetTransactionId(transaction);
+
+			return transaction;
+		}
+
 		/// <inheritdoc />
 		public object Clone()
 		{
@@ -67,6 +85,38 @@
 				TxOuts = this.TxOuts.Select(tx => (TxOut)tx.Clone()).ToList(),
 				Id = this.Id,
 			};
+		}
+
+		/// <inheritdoc />
+		public bool Equals(Transaction other)
+		{
+			if (ReferenceEquals(null, other)) return false;
+			if (ReferenceEquals(this, other)) return true;
+			return string.Equals(this.Id, other.Id, StringComparison.InvariantCulture);
+		}
+
+		/// <inheritdoc />
+		public override bool Equals(object obj)
+		{
+			if (ReferenceEquals(null, obj)) return false;
+			if (ReferenceEquals(this, obj)) return true;
+			return obj is Transaction && this.Equals((Transaction) obj);
+		}
+
+		/// <inheritdoc />
+		public override int GetHashCode()
+		{
+			return (this.Id != null ? StringComparer.InvariantCulture.GetHashCode(this.Id) : 0);
+		}
+
+		public static bool operator ==(Transaction left, Transaction right)
+		{
+			return Equals(left, right);
+		}
+
+		public static bool operator !=(Transaction left, Transaction right)
+		{
+			return !Equals(left, right);
 		}
 	}
 }

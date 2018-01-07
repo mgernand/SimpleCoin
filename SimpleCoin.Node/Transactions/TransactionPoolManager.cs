@@ -6,16 +6,21 @@
 	using JetBrains.Annotations;
 	using Microsoft.Extensions.Logging;
 	using Newtonsoft.Json;
+	using Util;
 
 	[UsedImplicitly]
-	public class TransactionPoolManager
+	public class TransactionPoolManager : ITransactionPoolManager
 	{
+		private static readonly object syncRoot = new object();
+
 		private readonly ILogger<TransactionPoolManager> logger;
-		private readonly TransactionManager transactionManager;
+		private readonly ITransactionManager transactionManager;
 
-		private readonly IList<Transaction> transactionPool;
+		private IList<Transaction> transactionPool;
 
-		public TransactionPoolManager(ILogger<TransactionPoolManager> logger, TransactionManager transactionManager)
+		public TransactionPoolManager(
+			ILogger<TransactionPoolManager> logger, 
+			ITransactionManager transactionManager)
 		{
 			this.logger = logger;
 			this.transactionManager = transactionManager;
@@ -24,60 +29,85 @@
 
 		public IList<Transaction> TransactionPool
 		{
-			get { return this.transactionPool.Select(tx => (Transaction)tx.Clone()).ToList(); }
-		}
-
-		public void AddToTransactionPool(Transaction tx, IList<UnspentTxOut> unspentTxOuts)
-		{
-			if (!this.transactionManager.IsValidTransaction(tx, unspentTxOuts))
+			get
 			{
-				throw new InvalidOperationException("Trying to add invalid transaction to pool");
-			}
-
-			if (!this.IsValidTransactionForPool(tx, this.transactionPool))
-			{
-				throw new InvalidOperationException("Trying to add invalid transaction to pool.");
-			}
-
-			this.logger.LogInformation($"Adding transaction to pool: {tx.Id}");
-		}
-
-		public void UpdateTransactionPool(IList<UnspentTxOut> unspentTxOuts)
-		{
-			IList<Transaction> invalidTransactions = new List<Transaction>();
-
-			foreach (Transaction transaction in this.transactionPool)
-			{
-				foreach (TxIn txIn in transaction.TxIns)
+				lock (syncRoot)
 				{
-					if (!this.HasTxIn(txIn, unspentTxOuts))
-					{
-						invalidTransactions.Add(transaction);
-						break;
-					}
+					return this.transactionPool.Clone();
 				}
 			}
+		}
 
-			if (invalidTransactions.Count > 0)
+		/// <summary>
+		/// Adds the transaction to the transaction pool.
+		/// </summary>
+		/// <param name="transaction"></param>
+		/// <param name="unspentTxOuts"></param>
+		public void AddToTransactionPool(Transaction transaction, IList<UnspentTxOut> unspentTxOuts)
+		{
+			lock (syncRoot)
 			{
-				this.logger.LogError($"Removing the following transactions from the pool: {JsonConvert.SerializeObject(invalidTransactions.Select(x => x.Id).ToList())}");
+				if (!this.transactionManager.IsValidTransaction(transaction, unspentTxOuts))
+				{
+					throw new InvalidOperationException("Trying to add invalid transaction to pool");
+				}
+
+				if (!this.IsValidTransactionForPool(transaction))
+				{
+					throw new InvalidOperationException("Trying to add invalid transaction to pool.");
+				}
+
+				this.logger.LogInformation($"Adding transaction to pool: {transaction.Id}");
+				this.transactionPool.Add(transaction);
 			}
 		}
 
-		private IList<TxIn> GetTransactionPoolTxIns(IList<Transaction> aTransactionPool)
+		/// <summary>
+		/// Updates the transaction pool.
+		/// </summary>
+		/// <param name="unspentTxOuts"></param>
+		public void UpdateTransactionPool(IList<UnspentTxOut> unspentTxOuts)
 		{
-			return aTransactionPool
-				.SelectMany(tx => tx.TxIns)
-				.ToList();
+			lock (syncRoot)
+			{
+				IList<Transaction> invalidTransactions = new List<Transaction>();
+
+				foreach (Transaction transaction in this.transactionPool)
+				{
+					foreach (TxIn txIn in transaction.TxIns)
+					{
+						if (!HasTxIn(unspentTxOuts, txIn))
+						{
+							invalidTransactions.Add(transaction);
+							break;
+						}
+					}
+				}
+
+				if (invalidTransactions.Count > 0)
+				{
+					this.logger.LogError(
+						$"Removing the following transactions from the pool: {JsonConvert.SerializeObject(invalidTransactions.Select(x => x.Id).ToList())}");
+
+					this.transactionPool = this.transactionPool.Except(invalidTransactions).ToList();
+				}
+			}
 		}
 
-		private bool IsValidTransactionForPool(Transaction tx, IList<Transaction> aTransactionPool)
+		private IList<TxIn> GetTransactionPoolTxIns()
 		{
-			IList<TxIn> txPoolIns = this.GetTransactionPoolTxIns(aTransactionPool);
+			return this.transactionPool
+					.SelectMany(tx => tx.TxIns)
+					.ToList();
+		}
+
+		private bool IsValidTransactionForPool(Transaction tx)
+		{
+			IList<TxIn> txPoolIns = this.GetTransactionPoolTxIns();
 
 			foreach (TxIn txIn in tx.TxIns)
 			{
-				if (this.ContainsTxIn(txIn, txPoolIns))
+				if (ContainsTxIn(txPoolIns, txIn))
 				{
 					this.logger.LogError("TxIn already found in the transaction pool");
 					return false;
@@ -87,12 +117,12 @@
 			return true;
 		}
 
-		private bool ContainsTxIn(TxIn txIn, IList<TxIn> txPoolIns)
+		private static bool ContainsTxIn(IList<TxIn> txPoolIns, TxIn txIn)
 		{
 			return txPoolIns.Any(txPoolIn => txIn.TxOutIndex == txPoolIn.TxOutIndex && txIn.TxOutId == txPoolIn.TxOutId);
 		}
 
-		private bool HasTxIn(TxIn txIn, IList<UnspentTxOut> unspentTxOuts)
+		private static bool HasTxIn(IList<UnspentTxOut> unspentTxOuts, TxIn txIn)
 		{
 			return unspentTxOuts.Any(uTxOut => uTxOut.TxOutId == txIn.TxOutId && uTxOut.TxOutIndex == txIn.TxOutIndex);
 		}

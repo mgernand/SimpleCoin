@@ -1,7 +1,11 @@
 ﻿namespace SimpleCoin.Node.Transactions
 {
 	using System;
-	public class UnspentTxOut : ICloneable
+
+	/// <summary>
+	/// Unspent transaction outputs that make up the balance of a wallet.
+	/// </summary>
+	public sealed class UnspentTxOut : ICloneable
 	{
 		public UnspentTxOut(string txOutId, int txOutIndex, string address, long amount)
 		{

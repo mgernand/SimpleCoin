@@ -12,9 +12,12 @@
 	{
 		private readonly RequestDelegate next;
 		private readonly ILogger<WebSocketMiddleware> logger;
-		private readonly WebSocketManager webSocketManager;
+		private readonly IWebSocketManager webSocketManager;
 
-		public WebSocketMiddleware(RequestDelegate next, ILogger<WebSocketMiddleware> logger, WebSocketManager webSocketManager)
+		public WebSocketMiddleware(
+			RequestDelegate next, 
+			ILogger<WebSocketMiddleware> logger,
+			IWebSocketManager webSocketManager)
 		{
 			this.next = next;
 			this.logger = logger;

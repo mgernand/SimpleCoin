@@ -11,16 +11,16 @@
 	using Transactions;
 
 	[UsedImplicitly]
-	public class WalletManager
+	public class WalletManager : IWalletManager
 	{
 		private readonly ILogger<WalletManager> logger;
 		private readonly IOptions<ApplicationSettings> options;
-		private readonly TransactionManager transactionManager;
+		private readonly ITransactionManager transactionManager;
 
 		public WalletManager(
 			ILogger<WalletManager> logger, 
-			IOptions<ApplicationSettings> options, 
-			TransactionManager transactionManager)
+			IOptions<ApplicationSettings> options,
+			ITransactionManager transactionManager)
 		{
 			this.logger = logger;
 			this.options = options;
@@ -119,17 +119,17 @@
 
 			string myAddress = Crypto.GetPublicKey(privateKey);
 			IList<UnspentTxOut> myUnspentTxOutsA = unspentTxOuts.Where(uTxOut => uTxOut.Address == myAddress).ToList();
-			IList<UnspentTxOut> myUnspentTxOuts = this.FilterTransactionPoolTransactions(myUnspentTxOutsA, transactionPool);
+			IList<UnspentTxOut> myUnspentTxOuts = FilterTransactionPoolTransactions(myUnspentTxOutsA, transactionPool);
 
 			// Filter from unspentOutputs such inputs that are referenced in pool.
-			(IList<UnspentTxOut> includedUnspentTxOuts, long leftOverAmount) = this.FindTxOutsForAmount(amount, myUnspentTxOuts);
+			(IList<UnspentTxOut> includedUnspentTxOuts, long leftOverAmount) = FindTxOutsForAmount(amount, myUnspentTxOuts);
 
 			IList<TxIn> unsignedTxIns = includedUnspentTxOuts.Select(uTxOut => uTxOut.ToUnsignedTxIn()).ToList();
 
 			Transaction tx = new Transaction
 			{
 				TxIns = unsignedTxIns,
-				TxOuts = this.CreateTxOuts(receiverAdress, myAddress, amount, leftOverAmount)
+				TxOuts = CreateTxOuts(receiverAdress, myAddress, amount, leftOverAmount)
 			};
 			tx.Id = Transaction.GetTransactionId(tx);
 
@@ -142,12 +142,12 @@
 			return tx;
 		}
 
-		public IList<UnspentTxOut> FindUnspentTxOuts(string ownerAddress, IList<UnspentTxOut> unspentTxOuts)
+		public static IList<UnspentTxOut> FindUnspentTxOuts(string ownerAddress, IList<UnspentTxOut> unspentTxOuts)
 		{
 			return unspentTxOuts.Where(uTxOut => uTxOut.Address == ownerAddress).ToList();
 		}
 
-		public IList<UnspentTxOut> FilterTransactionPoolTransactions(IList<UnspentTxOut> unspentTxOuts, IList<Transaction> transactionPool)
+		private static IList<UnspentTxOut> FilterTransactionPoolTransactions(IList<UnspentTxOut> unspentTxOuts, IList<Transaction> transactionPool)
 		{
 			IList<TxIn> txIns = transactionPool
 				.SelectMany(tx => tx.TxIns)
@@ -159,11 +159,7 @@
 			{
 				TxIn txIn = txIns.FirstOrDefault(aTxIn =>aTxIn.TxOutIndex == unspentTxOut.TxOutIndex && aTxIn.TxOutId == unspentTxOut.TxOutId);
 
-				if (txIn == null)
-				{
-					 // TODO
-				}
-				else
+				if (txIn != null)
 				{
 					removable.Add(unspentTxOut);
 				}
@@ -172,7 +168,7 @@
 			return unspentTxOuts.Except(removable).ToList();
 		}
 
-		private (IList<UnspentTxOut>, long) FindTxOutsForAmount(long amount, IList<UnspentTxOut> myUnspentTxOuts)
+		private static (IList<UnspentTxOut>, long) FindTxOutsForAmount(long amount, IList<UnspentTxOut> myUnspentTxOuts)
 		{
 			long currentAmount = 0;
 			IList<UnspentTxOut> includedUnspentTxOuts = new List<UnspentTxOut>();
@@ -189,11 +185,10 @@
 				}
 			}
 
-			this.logger.LogCritical("Not enough coins to send in transaction");
-			throw new InvalidOperationException("Not enough coins to send in transaction");
+			throw new InvalidOperationException("Not enough coins to send in transaction.");
 		}
 
-		private IList<TxOut> CreateTxOuts(string receiverAddress, string myAddress, long amount, long leftOverAmount)
+		private static IList<TxOut> CreateTxOuts(string receiverAddress, string myAddress, long amount, long leftOverAmount)
 		{
 			TxOut txOut1 = new TxOut(receiverAddress, amount);
 

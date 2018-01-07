@@ -1,5 +1,6 @@
 ﻿namespace SimpleCoin.Node.Blockchain
 {
+	using System;
 	using System.Collections.Generic;
 	using Transactions;
 

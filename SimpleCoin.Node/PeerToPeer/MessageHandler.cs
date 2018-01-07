@@ -12,18 +12,18 @@
 	using Transactions;
 
 	[UsedImplicitly]
-	public class MessageHandler
+	public class MessageHandler : IMessageHandler
 	{
 		private readonly ILogger<MessageHandler> logger;
-		private readonly BlockchainManager blockchainManager;
-		private readonly TransactionPoolManager transactionPoolManager;
-		private readonly BroadcastService broadcastService;
+		private readonly IBlockchainManager blockchainManager;
+		private readonly ITransactionPoolManager transactionPoolManager;
+		private readonly IBroadcastService broadcastService;
 
 		public MessageHandler(
-			ILogger<MessageHandler> logger, 
-			BlockchainManager blockchainManager,
-			TransactionPoolManager transactionPoolManager,
-			BroadcastService broadcastService)
+			ILogger<MessageHandler> logger,
+			IBlockchainManager blockchainManager,
+			ITransactionPoolManager transactionPoolManager,
+			IBroadcastService broadcastService)
 		{
 			this.logger = logger;
 			this.blockchainManager = blockchainManager;
@@ -119,7 +119,7 @@
 
 				if (latestBlockHeld.Hash == latestBlockReceived.Hash)
 				{
-					if (this.blockchainManager.AddBlock(latestBlockReceived))
+					if (this.blockchainManager.AddBlockToChain(latestBlockReceived))
 					{
 						await this.blockchainManager.BroadcastLastest();
 					}
