@@ -11,6 +11,10 @@ start dotnet -Args run, --port=5001
 start dotnet -Args run, --port=5002
 ```
 
+## Disclaimer
+
+This tool is intended to be used for **educational purposes** only. Use it on **your own risk**.
+
 ## HTTP REST API
 
 The REST API is demoed using the curl command. To have it available on Windows install
